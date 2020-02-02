@@ -13,7 +13,8 @@ package object errors {
 
   /** An error from the extractor. */
   sealed trait ExtractorError extends Exception
-  case object NoResources extends ExtractorError
+  case object NoScripts extends ExtractorError
+  case object NoStylesheets extends ExtractorError
 
   sealed trait ScraperError
   object ScraperError {
