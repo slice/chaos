@@ -18,7 +18,8 @@ lazy val root = (project in file(".")).settings(
   ).map(_ % catsVersion),
   resolvers += Resolver.sonatypeRepo("snapshots"),
   libraryDependencies ++= Seq(
-    "org.http4s" %% "http4s-blaze-client"
+    "org.http4s" %% "http4s-blaze-client",
+    "org.http4s" %% "http4s-dsl"
   ).map(_ % http4sVersion),
   libraryDependencies ++= Seq(
     "co.fs2" %% "fs2-core"

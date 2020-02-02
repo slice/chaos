@@ -16,8 +16,9 @@ object Main extends IOApp {
   def program[F[_]: ConcurrentEffect: Timer]: F[Unit] =
     Stream.emits(Branch.all)
       .map { branch =>
-        branch.buildStream(Scraper.global[F])
-          .metered(1.second)
+        branch
+          .buildStream(Scraper.global[F])
+          .metered(10.seconds)
           .evalTap(build => print[F](s"Scraped $branch: $build"))
       }
       .parJoin(Branch.all.size)

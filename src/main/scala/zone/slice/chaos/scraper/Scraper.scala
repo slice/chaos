@@ -2,8 +2,12 @@ package zone.slice.chaos
 package scraper
 
 import discord._
+import errors._
 
+import cats.data.EitherT
 import cats.effect._
+import cats.implicits._
+import cats._
 import org.http4s.client.blaze.BlazeClientBuilder
 
 import scala.concurrent.ExecutionContext
@@ -15,8 +19,19 @@ import scala.concurrent.ExecutionContext
  * Effects are executed within `F`.
  */
 trait Scraper[F[_]] {
-  /** Scrapes a [[discord.Branch branch]], yielding [[discord.Build build]] information. */
-  def scrape(branch: Branch): F[Build]
+  /** Downloads the HTML for the `/channels/@me` of the branch. */
+  def download(branch: Branch): EitherT[F, DownloadError, String]
+
+  /**
+   * Scrapes a [[discord.Branch branch]], yielding [[discord.Build build]] information.
+   * This combines `download` and `extract` into one method.
+   */
+  def scrape(branch: Branch)(implicit monad: Monad[F]): EitherT[F, ScraperError, Build] = {
+    download(branch)
+      .leftMap(ScraperError.Download)
+      .leftWiden[ScraperError]
+      .map(pageText => Build(branch = branch, buildNumber = 1)) // TODO: Write the extractor
+  }
 }
 
 object Scraper {

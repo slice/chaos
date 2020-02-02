@@ -2,6 +2,8 @@ package zone.slice.chaos
 package discord
 
 import scraper._
+import errors.ScraperError
+
 import fs2._
 import cats.effect._
 import org.http4s.Uri
@@ -20,9 +22,9 @@ sealed trait Branch {
     }
 
   /** The fs2 Stream of builds for this branch. */
-  def buildStream[F[_]: Concurrent](scraperResource: Resource[F, Scraper[F]]): Stream[F, Build] =
+  def buildStream[F[_]: Concurrent](scraperResource: Resource[F, Scraper[F]]): Stream[F, Either[ScraperError, Build]] =
     Stream.resource(scraperResource).flatMap { scraper =>
-      Stream.repeatEval(scraper.scrape(this))
+      Stream.repeatEval(scraper.scrape(this).value)
     }
 }
 
