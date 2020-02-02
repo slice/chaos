@@ -12,14 +12,14 @@ sealed trait Branch {
   /** The `discordapp.com` subdomain of this branch. */
   def subdomain: Option[String]
 
-  /** The [[org.http4s.Uri URI]] of this branch. */
+  /** The http4s URI of this branch. */
   def uri: Uri =
     subdomain match {
       case Some(subdomain) => Uri.unsafeFromString(s"https://$subdomain.discordapp.com")
       case None => uri"https://discordapp.com"
     }
 
-  /** The [[fs2.Stream stream]] of builds for this branch. */
+  /** The fs2 Stream of builds for this branch. */
   def buildStream[F[_]: Concurrent](scraperResource: Resource[F, Scraper[F]]): Stream[F, Build] =
     Stream.resource(scraperResource).flatMap { scraper =>
       Stream.repeatEval(scraper.scrape(this))

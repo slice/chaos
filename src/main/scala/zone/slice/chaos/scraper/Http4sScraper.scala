@@ -7,7 +7,7 @@ import cats.effect._
 import org.http4s.client.Client
 
 /**
- * A [[Scraper scraper]] which uses an [[org.http4s.client.Client Http4s client]] to perform HTTP requests.
+ * A [[Scraper]] which uses an http4s Client to perform HTTP requests.
  */
 class Http4sScraper[F[_]](client: Client[F])(implicit F: Sync[F]) extends Scraper[F] {
   override def scrape(branch: Branch): F[Build] =
