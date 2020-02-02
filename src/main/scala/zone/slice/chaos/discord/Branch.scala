@@ -22,10 +22,8 @@ sealed trait Branch {
     }
 
   /** The fs2 Stream of builds for this branch. */
-  def buildStream[F[_]: Concurrent](scraperResource: Resource[F, Scraper[F]]): Stream[F, Either[ScraperError, Build]] =
-    Stream.resource(scraperResource).flatMap { scraper =>
+  def buildStream[F[_]: Concurrent](scraper: Scraper[F]): Stream[F, Either[ScraperError, Build]] =
       Stream.repeatEval(scraper.scrape(this).value)
-    }
 }
 
 object Branch {

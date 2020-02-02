@@ -14,14 +14,19 @@ object Main extends IOApp {
   def print[F[_]: Sync](text: String): F[Unit] = Sync[F].delay(println(text))
 
   def program[F[_]: ConcurrentEffect: Timer]: F[Unit] =
-    Stream.emits(Branch.all)
-      .map { branch =>
-        branch
-          .buildStream(Scraper.global[F])
-          .metered(10.seconds)
-          .evalTap(build => print[F](s"Scraped $branch: $build"))
+    Stream
+      .resource(Scraper.global[F])
+      .flatMap { scraper =>
+        Stream
+          .emits(Branch.all)
+          .map { branch =>
+            branch
+              .buildStream(scraper)
+              .metered(10.seconds)
+              .evalTap(build => print[F](s"Scraped $branch: $build"))
+          }
+          .parJoin(Branch.all.size)
       }
-      .parJoin(Branch.all.size)
       .compile
       .drain
 
