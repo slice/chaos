@@ -3,7 +3,8 @@ package discord
 
 import cats.Show
 
-case class Build(branch: Branch, buildNumber: Int)
+/** A Discord client build. */
+final case class Build(branch: Branch, buildNumber: Int, assets: Seq[Asset])
 
 object Build {
   implicit val showBuild: Show[Build] = (build: Build) =>
