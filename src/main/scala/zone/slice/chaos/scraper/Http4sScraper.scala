@@ -13,9 +13,11 @@ import org.http4s.Method._
 import org.http4s.Status.Successful
 
 /**
- * A [[Scraper]] which uses an http4s Client to perform HTTP requests.
- */
-class Http4sScraper[F[_]: Sync](client: Client[F]) extends Scraper[F] with Http4sClientDsl[F] {
+  * A [[Scraper]] which uses an http4s Client to perform HTTP requests.
+  */
+class Http4sScraper[F[_]: Sync](client: Client[F])
+    extends Scraper[F]
+    with Http4sClientDsl[F] {
   override def download(branch: Branch): EitherT[F, DownloadError, String] = {
     val requestingUri = branch.uri / "channels" / "@me"
     val headers = List(`User-Agent`(AgentProduct("chaos", none[String])))

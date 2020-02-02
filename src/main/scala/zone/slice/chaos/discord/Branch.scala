@@ -11,22 +11,27 @@ import org.http4s.implicits._
 
 /** A Discord client branch. */
 sealed trait Branch {
+
   /** The `discordapp.com` subdomain of this branch. */
   def subdomain: Option[String]
 
   /** The http4s URI of this branch. */
   def uri: Uri =
     subdomain match {
-      case Some(subdomain) => Uri.unsafeFromString(s"https://$subdomain.discordapp.com")
+      case Some(subdomain) =>
+        Uri.unsafeFromString(s"https://$subdomain.discordapp.com")
       case None => uri"https://discordapp.com"
     }
 
   /** The fs2 Stream of builds for this branch. */
-  def buildStream[F[_]: Concurrent](scraper: Scraper[F]): Stream[F, Either[ScraperError, Build]] =
-      Stream.repeatEval(scraper.scrape(this).value)
+  def buildStream[F[_]: Concurrent](
+    scraper: Scraper[F]
+  ): Stream[F, Either[ScraperError, Build]] =
+    Stream.repeatEval(scraper.scrape(this).value)
 }
 
 object Branch {
+
   /** The main branch. */
   final case object Stable extends Branch {
     override def subdomain: Option[String] = None
