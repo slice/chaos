@@ -11,6 +11,7 @@ import cats._
 import org.http4s.client.blaze.BlazeClientBuilder
 
 import scala.concurrent.ExecutionContext
+import scala.util.matching.Regex
 
 /**
   * Downloads Discord client bundles and extracts metdata from them (in the form
@@ -23,6 +24,28 @@ trait Scraper[F[_]] {
   /** Downloads the HTML for the `/channels/@me` of the branch. */
   def download(branch: Branch): EitherT[F, DownloadError, String]
 
+  /** Extracts resources (scripts and styles) from the HTML of `/channels/@me`. */
+  def extract(branch: Branch,
+              pageHtml: String): Either[ExtractorError, Build] = {
+    val scriptTagRegex =
+      raw"""<script src="/assets/([.a-f0-9]+)\.js" integrity=".+"></script>""".r.unanchored
+    val styleTagRegex =
+      raw"""<link rel="stylesheet" href="/assets/([.a-f0-9]+)\.css" integrity=".+">""".r.unanchored
+
+    def pull[A](maker: String => A,
+                error: ExtractorError,
+                regex: Regex): Either[ExtractorError, Vector[A]] = {
+      val hashes = regex.findAllMatchIn(pageHtml).map(_.group(1))
+      if (hashes.isEmpty) Left(error)
+      else Right(hashes.map(maker).toVector)
+    }
+
+    for {
+      scripts <- pull(Asset.Script, NoScripts, scriptTagRegex)
+      styles <- pull(Asset.Stylesheet, NoStylesheets, styleTagRegex)
+    } yield Build(branch = branch, buildNumber = 1, assets = scripts ++ styles)
+  }
+
   /**
     * Scrapes a [[discord.Branch branch]], yielding [[discord.Build build]] information.
     * This combines `download` and `extract` into one method.
@@ -30,10 +53,16 @@ trait Scraper[F[_]] {
   def scrape(
     branch: Branch
   )(implicit monad: Monad[F]): EitherT[F, ScraperError, Build] = {
-    download(branch)
-      .leftMap(ScraperError.Download)
-      .leftWiden[ScraperError]
-      .map(pageText => Build(branch = branch, buildNumber = 1)) // TODO: Write the extractor
+    for {
+      pageText <- download(branch)
+        .leftMap(ScraperError.Download)
+        .leftWiden[ScraperError]
+      build <- EitherT.fromEither[F](
+        extract(branch, pageText)
+          .leftMap(ScraperError.Extractor)
+          .leftWiden[ScraperError]
+      )
+    } yield build
   }
 }
 
