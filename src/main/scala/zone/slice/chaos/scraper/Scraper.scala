@@ -11,7 +11,7 @@ import org.http4s.Uri
 import org.http4s.client.blaze.BlazeClientBuilder
 
 import scala.concurrent.ExecutionContext
-import scala.util.matching.Regex
+import scala.util.matching.{Regex, UnanchoredRegex}
 
 /**
   * Downloads Discord client bundles and extracts metdata from them (in the form
@@ -28,26 +28,35 @@ trait Scraper[F[_]] {
   def fetchClient(branch: Branch): EitherT[F, DownloadError, String] =
     fetch(branch.uri / "channels" / "@me")
 
-  /** Extracts resources (scripts and styles) from the HTML of `/channels/@me`. */
-  def extract(branch: Branch,
-              pageHtml: String): Either[ExtractorError, Build] = {
+  /** Extracts assets (scripts and styles) from the HTML of `/channels/@me`. */
+  def extractAssets(pageHtml: String): Either[ExtractorError, Vector[Asset]] = {
     val scriptTagRegex =
       raw"""<script src="/assets/([.a-f0-9]+)\.js" integrity=".+"></script>""".r.unanchored
     val styleTagRegex =
       raw"""<link rel="stylesheet" href="/assets/([.a-f0-9]+)\.css" integrity=".+">""".r.unanchored
 
-    def pull[A](maker: String => A,
-                error: ExtractorError,
-                regex: Regex): Either[ExtractorError, Vector[A]] = {
+    def pull[A <: Asset](assetType: String => A,
+                         extractorError: ExtractorError,
+                         regex: Regex): Either[ExtractorError, Vector[A]] = {
       val hashes = regex.findAllMatchIn(pageHtml).map(_.group(1))
-      if (hashes.isEmpty) Left(error)
-      else Right(hashes.map(maker).toVector)
+      if (hashes.isEmpty) Left(extractorError)
+      else Right(hashes.map(assetType).toVector)
     }
 
-    for {
-      scripts <- pull(Asset.Script, NoScripts, scriptTagRegex)
-      styles <- pull(Asset.Stylesheet, NoStylesheets, styleTagRegex)
-    } yield Build(branch = branch, buildNumber = 1, assets = scripts ++ styles)
+    val assetTypes: Map[String => Asset, (UnanchoredRegex, ExtractorError)] =
+      Map(
+        Asset.Script -> (scriptTagRegex, NoScripts),
+        Asset.Stylesheet -> (styleTagRegex, NoStylesheets)
+      )
+
+    assetTypes
+      .map {
+        case (assetType, (regex, extractorError)) =>
+          pull(assetType, extractorError, regex)
+      }
+      .toVector
+      .sequence
+      .map(_.flatten)
   }
 
   /**
@@ -60,11 +69,11 @@ trait Scraper[F[_]] {
     for {
       pageText <- fetchClient(branch)
         .leftMap[ScraperError](ScraperError.Download)
-      build <- EitherT.fromEither[F](
-        extract(branch, pageText)
+      assets <- EitherT.fromEither[F](
+        extractAssets(pageText)
           .leftMap[ScraperError](ScraperError.Extractor)
       )
-    } yield build
+    } yield Build(branch = branch, buildNumber = 1, assets = assets)
   }
 }
 
