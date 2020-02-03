@@ -19,8 +19,19 @@ import org.http4s.Uri
 class Http4sScraper[F[_]: Sync](client: Client[F])
     extends Scraper[F]
     with Http4sClientDsl[F] {
+  private def products: (AgentProduct, List[AgentToken]) = {
+    val mainProduct = AgentProduct(BuildInfo.name, BuildInfo.version.some)
+    val otherTokens = List(AgentProduct("scala", BuildInfo.scalaVersion.some))
+
+    (mainProduct, BuildInfo.homepage match {
+      case None           => otherTokens
+      case Some(homepage) => AgentComment(homepage.toString) +: otherTokens
+    })
+  }
+
   override def fetch(uri: Uri): EitherT[F, DownloadError, String] = {
-    val headers = List(`User-Agent`(AgentProduct("chaos", none[String])))
+    val (mainProduct, otherTokens) = products
+    val headers = List(`User-Agent`(mainProduct, otherTokens))
     val request = GET(uri, headers: _*)
 
     val result = client.fetch[Either[DownloadError, String]](request) {
