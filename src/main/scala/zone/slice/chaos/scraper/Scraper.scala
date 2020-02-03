@@ -55,12 +55,10 @@ trait Scraper[F[_]] {
   )(implicit monad: Monad[F]): EitherT[F, ScraperError, Build] = {
     for {
       pageText <- download(branch)
-        .leftMap(ScraperError.Download)
-        .leftWiden[ScraperError]
+        .leftMap[ScraperError](ScraperError.Download)
       build <- EitherT.fromEither[F](
         extract(branch, pageText)
-          .leftMap(ScraperError.Extractor)
-          .leftWiden[ScraperError]
+          .leftMap[ScraperError](ScraperError.Extractor)
       )
     } yield build
   }
