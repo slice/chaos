@@ -2,7 +2,7 @@ package zone.slice.chaos
 package scraper
 
 import errors._
-import discord._
+
 import cats.data.EitherT
 import cats.implicits._
 import cats.effect._

@@ -3,6 +3,7 @@ package scraper
 
 import discord._
 import errors._
+
 import cats.data.EitherT
 import cats.effect._
 import cats.implicits._
