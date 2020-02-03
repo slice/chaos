@@ -23,7 +23,12 @@ object Main extends IOApp {
             branch
               .buildStream(scraper)
               .metered(10.seconds)
-              .evalTap(build => print[F](s"Scraped $branch: $build"))
+              .evalTap {
+                case Left(error) =>
+                  print[F](show"[error] failed to scrape $branch: $error")
+                case Right(build) =>
+                  print[F](show"[info] scraped $branch: $build")
+              }
           }
           .parJoin(Branch.all.size)
       }
