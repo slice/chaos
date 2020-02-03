@@ -26,7 +26,7 @@ package object errors {
       Show.fromToString[ExtractorError]
   }
 
-  sealed trait ScraperError
+  sealed trait ScraperError extends Exception
   object ScraperError {
     final case class Download(error: DownloadError) extends ScraperError
     final case class Extractor(error: ExtractorError) extends ScraperError
