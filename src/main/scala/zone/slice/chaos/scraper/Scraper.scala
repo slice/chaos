@@ -3,11 +3,11 @@ package scraper
 
 import discord._
 import errors._
-
 import cats.data.EitherT
 import cats.effect._
 import cats.implicits._
 import cats._
+import org.http4s.Uri
 import org.http4s.client.blaze.BlazeClientBuilder
 
 import scala.concurrent.ExecutionContext
@@ -21,8 +21,12 @@ import scala.util.matching.Regex
   */
 trait Scraper[F[_]] {
 
-  /** Downloads the HTML for the `/channels/@me` of the branch. */
-  def download(branch: Branch): EitherT[F, DownloadError, String]
+  /** Downloads the content of a Uri as a [[String]]. */
+  protected def fetch(uri: Uri): EitherT[F, DownloadError, String]
+
+  /** Downloads the main client HTML for a [[Branch]]. */
+  def fetchClient(branch: Branch): EitherT[F, DownloadError, String] =
+    fetch(branch.uri / "channels" / "@me")
 
   /** Extracts resources (scripts and styles) from the HTML of `/channels/@me`. */
   def extract(branch: Branch,
@@ -54,7 +58,7 @@ trait Scraper[F[_]] {
     branch: Branch
   )(implicit monad: Monad[F]): EitherT[F, ScraperError, Build] = {
     for {
-      pageText <- download(branch)
+      pageText <- fetchClient(branch)
         .leftMap[ScraperError](ScraperError.Download)
       build <- EitherT.fromEither[F](
         extract(branch, pageText)

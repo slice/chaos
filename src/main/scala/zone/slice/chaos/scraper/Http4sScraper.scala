@@ -11,6 +11,7 @@ import org.http4s.client.Client
 import org.http4s.headers._
 import org.http4s.Method._
 import org.http4s.Status.Successful
+import org.http4s.Uri
 
 /**
   * A [[Scraper]] which uses an http4s Client to perform HTTP requests.
@@ -18,10 +19,9 @@ import org.http4s.Status.Successful
 class Http4sScraper[F[_]: Sync](client: Client[F])
     extends Scraper[F]
     with Http4sClientDsl[F] {
-  override def download(branch: Branch): EitherT[F, DownloadError, String] = {
-    val requestingUri = branch.uri / "channels" / "@me"
+  override def fetch(uri: Uri): EitherT[F, DownloadError, String] = {
     val headers = List(`User-Agent`(AgentProduct("chaos", none[String])))
-    val request = GET(requestingUri, headers: _*)
+    val request = GET(uri, headers: _*)
 
     val result = client.fetch[Either[DownloadError, String]](request) {
       case Successful(response) =>
