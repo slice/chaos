@@ -4,15 +4,18 @@ import discord._
 import scraper._
 import scraper.errors._
 
-import cats._
-import cats.data._
+import io.chrisdavenport.log4cats.Logger
+import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import cats.implicits._
 import cats.effect._
-import scala.concurrent.duration._
 import fs2._
 
+import scala.concurrent.duration._
+
 object Main extends IOApp {
-  def print[F[_]: Sync](text: String): F[Unit] = Sync[F].delay(println(text))
+  // ~_~
+  protected implicit def unsafeLogger[F[_]: Sync]: Logger[F] =
+    Slf4jLogger.getLogger[F]
 
   /** Similar to `Stream.awakeEvery`, but doesn't do a first sleep. */
   def eagerAwakeEvery[F[_]: ConcurrentEffect: Timer](
@@ -29,9 +32,9 @@ object Main extends IOApp {
         .zipRight(branch.buildStream(scraper))
         .evalTap {
           case Left(error) =>
-            print[F](show"[error] failed to scrape $branch: $error")
+            Logger[F].error(error)(show"failed to scrape $branch")
           case Right(build) =>
-            print[F](show"[info] scraped $branch: $build")
+            Logger[F].info(show"scraped $branch: $build")
         }
     }
 
@@ -46,6 +49,6 @@ object Main extends IOApp {
       .drain
 
   override def run(args: List[String]): IO[ExitCode] = {
-    IO(println("[info] scraper started")) *> program[IO].as(ExitCode.Success)
+    Logger[IO].info("starting scrape loop") *> program[IO].as(ExitCode.Success)
   }
 }
