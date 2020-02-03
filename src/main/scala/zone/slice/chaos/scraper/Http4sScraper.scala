@@ -21,7 +21,10 @@ class Http4sScraper[F[_]: Sync](client: Client[F])
     with Http4sClientDsl[F] {
   private def products: (AgentProduct, List[AgentToken]) = {
     val mainProduct = AgentProduct(BuildInfo.name, BuildInfo.version.some)
-    val otherTokens = List(AgentProduct("scala", BuildInfo.scalaVersion.some))
+    val otherTokens = List(
+      AgentProduct("scala", BuildInfo.scalaVersion.some),
+      AgentProduct("http4s", org.http4s.BuildInfo.version.some)
+    )
 
     (mainProduct, BuildInfo.homepage match {
       case None           => otherTokens
