@@ -8,9 +8,17 @@ package object errors {
 
   /** An error from the downloader. */
   sealed trait DownloadError extends Exception
-  final case class DecodeError(error: DecodeFailure) extends DownloadError
-  final case class NetworkError(error: Throwable) extends DownloadError
-  final case class HTTPError[F[_]](response: Response[F]) extends DownloadError
+  final case class DecodeError(error: DecodeFailure) extends DownloadError {
+    override def getMessage: String = error.getMessage
+  }
+  final case class NetworkError(error: Throwable) extends DownloadError {
+    override def getMessage: String = error.getMessage
+  }
+  final case class HTTPError[F[_]](response: Response[F])
+      extends DownloadError {
+    override val getMessage: String =
+      s"Server returned ${response.status.code} ${response.status.reason}"
+  }
   object DownloadError {
     implicit val showDownloadError: Show[DownloadError] =
       Show.fromToString[DownloadError]
@@ -18,9 +26,15 @@ package object errors {
 
   /** An error from the extractor. */
   sealed trait ExtractorError extends Exception
-  case object NoScripts extends ExtractorError
-  case object NoStylesheets extends ExtractorError
-  case object NoBuildNumber extends ExtractorError
+  case object NoScripts extends ExtractorError {
+    override val getMessage: String = "No script tags were found"
+  }
+  case object NoStylesheets extends ExtractorError {
+    override val getMessage: String = "No stylesheet tags were found"
+  }
+  case object NoBuildNumber extends ExtractorError {
+    override val getMessage: String = "A build number couldn't be found"
+  }
   object ExtractorError {
     implicit val showExtractorError: Show[ExtractorError] =
       Show.fromToString[ExtractorError]
@@ -28,8 +42,13 @@ package object errors {
 
   sealed trait ScraperError extends Exception
   object ScraperError {
-    final case class Download(error: DownloadError) extends ScraperError
-    final case class Extractor(error: ExtractorError) extends ScraperError
+    final case class Download(error: DownloadError) extends ScraperError {
+      override def getMessage: String = s"Downloader error: ${error.getMessage}"
+    }
+
+    final case class Extractor(error: ExtractorError) extends ScraperError {
+      override def getMessage: String = s"Extractor error: ${error.getMessage}"
+    }
 
     implicit val showScraperError: Show[ScraperError] =
       Show.fromToString[ScraperError]
