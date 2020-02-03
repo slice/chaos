@@ -59,6 +59,31 @@ trait Scraper[F[_]] {
       .map(_.flatten)
   }
 
+  /** Fetches and extracts the build number from a [[Seq]] of [[Asset]]s. */
+  def fetchBuildNumber(branch: Branch, assets: Seq[Asset])(
+    implicit monad: Monad[F]
+  ): EitherT[F, ScraperError, Int] = {
+    val scripts = assets.filter(_.isInstanceOf[Asset.Script])
+    val buildMetadataRegex =
+      raw"Build Number: (\d+), Version Hash: ([a-f0-9]+)".r.unanchored
+
+    for {
+      mainScript <- EitherT
+        .fromEither[F](scripts.lastOption.toRight(NoScripts))
+        .leftMap[ScraperError](ScraperError.Extractor)
+      text <- fetch(branch.uri / "assets" / mainScript.filename.path)
+        .leftMap[ScraperError](ScraperError.Download)
+      buildNumber <- EitherT
+        .fromEither[F](
+          buildMetadataRegex
+            .findFirstMatchIn(text)
+            .toRight(NoBuildNumber)
+        )
+        .leftMap[ScraperError](ScraperError.Extractor)
+        .map(_.group(1).toInt)
+    } yield buildNumber
+  }
+
   /**
     * Scrapes a [[discord.Branch branch]], yielding [[discord.Build build]] information.
     * This combines `download` and `extract` into one method.
@@ -73,7 +98,8 @@ trait Scraper[F[_]] {
         extractAssets(pageText)
           .leftMap[ScraperError](ScraperError.Extractor)
       )
-    } yield Build(branch = branch, buildNumber = 1, assets = assets)
+      buildNumber <- fetchBuildNumber(branch, assets)
+    } yield Build(branch = branch, buildNumber = buildNumber, assets = assets)
   }
 }
 

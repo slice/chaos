@@ -15,6 +15,7 @@ package object errors {
   sealed trait ExtractorError extends Exception
   case object NoScripts extends ExtractorError
   case object NoStylesheets extends ExtractorError
+  case object NoBuildNumber extends ExtractorError
 
   sealed trait ScraperError
   object ScraperError {
