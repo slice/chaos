@@ -38,8 +38,7 @@ class Http4sScraper[F[_]: Sync](client: Client[F])
       case Successful(response) =>
         response
           .attemptAs[String]
-          .leftMap(DecodeError)
-          .leftWiden[DownloadError]
+          .leftMap[DownloadError](DecodeError)
           .value
       case failedResponse => Sync[F].pure(Left(HTTPError(failedResponse)))
     }
