@@ -4,7 +4,7 @@ package discord
 import cats.Show
 
 /** A Discord client build. */
-final case class Build(branch: Branch, buildNumber: Int, assets: Seq[Asset])
+final case class Build(branch: Branch, buildNumber: Int, assets: Vector[Asset])
 
 object Build {
   implicit val showBuild: Show[Build] = (build: Build) =>
