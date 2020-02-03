@@ -1,6 +1,8 @@
 package zone.slice.chaos
 package discord
 
+import cats.Show
+import cats.implicits._
 import org.http4s.Uri
 
 /** A Discord client build asset (either an [[Asset.Script]] or [[Asset.Stylesheet]]). */
@@ -24,4 +26,7 @@ object Asset {
   final case class Stylesheet(name: String) extends Asset {
     override val extension: String = "css"
   }
+
+  implicit val showBuild: Show[Asset] = (asset: Asset) =>
+    show"${asset.name}.${asset.extension}"
 }

@@ -5,6 +5,7 @@ import scraper._
 import errors.ScraperError
 
 import fs2._
+import cats.Show
 import cats.effect._
 import org.http4s.Uri
 import org.http4s.implicits._
@@ -49,4 +50,6 @@ object Branch {
 
   /** The list of all branches. */
   val all: List[Branch] = Stable :: PTB :: Canary :: Nil
+
+  implicit val showBranch: Show[Branch] = Show.fromToString[Branch]
 }
