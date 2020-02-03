@@ -31,9 +31,9 @@ trait Scraper[F[_]] {
   /** Extracts assets (scripts and styles) from the HTML of `/channels/@me`. */
   def extractAssets(pageHtml: String): Either[ExtractorError, Vector[Asset]] = {
     val scriptTagRegex =
-      raw"""<script src="/assets/([.a-f0-9]+)\.js" integrity=".+"></script>""".r.unanchored
+      raw"""<script src="/assets/([.a-f0-9]+)\.js" integrity="[^"]+"></script>""".r.unanchored
     val styleTagRegex =
-      raw"""<link rel="stylesheet" href="/assets/([.a-f0-9]+)\.css" integrity=".+">""".r.unanchored
+      raw"""<link rel="stylesheet" href="/assets/([.a-f0-9]+)\.css" integrity="[^"]+">""".r.unanchored
 
     def pull[A <: Asset](assetType: String => A,
                          extractorError: ExtractorError,
