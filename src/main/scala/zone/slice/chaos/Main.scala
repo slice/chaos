@@ -14,14 +14,19 @@ import fs2._
 object Main extends IOApp {
   def print[F[_]: Sync](text: String): F[Unit] = Sync[F].delay(println(text))
 
+  /** Similar to `Stream.awakeEvery`, but doesn't do a first sleep. */
+  def eagerAwakeEvery[F[_]: ConcurrentEffect: Timer](
+    rate: FiniteDuration
+  ): Stream[F, FiniteDuration] =
+    Stream(0.seconds) ++ Stream.awakeEvery[F](rate)
+
   def allBuildsStream[F[_]: ConcurrentEffect: Timer](
     scraper: Scraper[F],
     rate: FiniteDuration
   ): Stream[F, Stream[F, Either[ScraperError, Build]]] =
     Stream.emits(Branch.all).map { branch =>
-      branch
-        .buildStream(scraper)
-        .metered(rate)
+      eagerAwakeEvery(rate)
+        .zipRight(branch.buildStream(scraper))
         .evalTap {
           case Left(error) =>
             print[F](show"[error] failed to scrape $branch: $error")
