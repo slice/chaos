@@ -86,8 +86,10 @@ trait Scraper[F[_]] {
   }
 
   /**
-    * Scrapes a [[discord.Branch branch]], yielding [[discord.Build build]] information.
-    * This combines `download` and `extract` into one method.
+    * Scrapes a [[discord.Branch Discord branch]] for [[discord.Build build information]].
+    *
+    * This takes care of downloading the branch's HTML, finding [[discord.Asset assets]],
+    * extracting the build number, etc.
     */
   def scrape(
     branch: Branch
