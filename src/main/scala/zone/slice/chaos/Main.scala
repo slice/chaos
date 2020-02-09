@@ -1,9 +1,11 @@
 package zone.slice.chaos
 
 import discord._
+import publisher._
 import scraper._
 import scraper.errors._
 
+import cats.data.EitherT
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import cats.implicits._
@@ -43,16 +45,31 @@ object Main extends IOApp {
         }
     }
 
-  def notify[F[_]: ConcurrentEffect](build: Build): F[Unit] = {
-    Logger[F].info(show"notifying for $build")
+  def publish[F[_]: ConcurrentEffect](
+    build: Build
+  )(implicit httpClient: Client[F]): EitherT[F, Exception, Unit] = {
+    EitherT[F, Exception, Unit](
+      Logger[F]
+        .info(
+          show"Fresh build for ${build.branch} (${build.buildNumber}), publishing"
+        )
+        .as(Right(()))
+    ) *> new DiscordPublisher[F](Webhook(BigInt("0"), "..."), httpClient)
+      .publish(build)
+      .leftWiden[Exception]
   }
 
-  def scanBuild[F[_]: ConcurrentEffect](freshnessMap: BuildMap,
-                                        build: Build): F[BuildMap] =
+  def scanBuild[F[_]: ConcurrentEffect: Client](freshnessMap: BuildMap,
+                                                build: Build): F[BuildMap] =
     if (freshnessMap
           .getOrElse(build.branch, none[Int])
           .forall(build.buildNumber > _))
-      notify[F](build)
+      publish[F](build).value
+        .flatTap {
+          case Left(error) =>
+            Logger[F].error(error)(show"Failed to publish $build")
+          case _ => Sync[F].pure(())
+        }
         .as(freshnessMap.updated(build.branch, build.buildNumber.some))
     else
       Sync[F].pure(freshnessMap)
@@ -60,15 +77,15 @@ object Main extends IOApp {
   def program[F[_]: ConcurrentEffect: Timer]: F[Unit] =
     Stream
       .resource(BlazeClientBuilder[F](ExecutionContext.global).resource)
-      .flatMap { scraper =>
-        allBuildsStream(scraper, rate = 5.seconds)
+      .flatMap { implicit httpClient =>
+        allBuildsStream(httpClient, rate = 5.seconds)
           .parJoin(Branch.all.size)
-      }
-      .evalScan(Branch.all.map((_, none[Int])).toMap) {
-        (freshnessMap, result) =>
-          result match {
-            case Right(build) => scanBuild(freshnessMap, build)
-            case _            => Sync[F].pure(freshnessMap)
+          .evalScan(Branch.all.map((_, none[Int])).toMap) {
+            (freshnessMap, result) =>
+              result match {
+                case Right(build) => scanBuild(freshnessMap, build)
+                case _            => Sync[F].pure(freshnessMap)
+              }
           }
       }
       .compile
