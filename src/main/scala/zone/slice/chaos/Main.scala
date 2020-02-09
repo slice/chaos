@@ -9,7 +9,10 @@ import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import cats.implicits._
 import cats.effect._
 import fs2._
+import org.http4s.client.Client
+import org.http4s.client.blaze.BlazeClientBuilder
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 object Main extends IOApp {
@@ -26,12 +29,12 @@ object Main extends IOApp {
     Stream(0.seconds) ++ Stream.awakeEvery[F](rate)
 
   def allBuildsStream[F[_]: ConcurrentEffect: Timer](
-    scraper: Scraper[F],
+    httpClient: Client[F],
     rate: FiniteDuration
   ): Stream[F, Stream[F, Either[ScraperError, Build]]] =
     Stream.emits(Branch.all).map { branch =>
       eagerAwakeEvery(rate)
-        .zipRight(branch.buildStream(scraper))
+        .zipRight(branch.buildStream(new Scraper(httpClient)))
         .evalTap {
           case Left(error) =>
             Logger[F].error(error)(show"failed to scrape $branch")
@@ -56,7 +59,7 @@ object Main extends IOApp {
 
   def program[F[_]: ConcurrentEffect: Timer]: F[Unit] =
     Stream
-      .resource(Scraper.global[F])
+      .resource(BlazeClientBuilder[F](ExecutionContext.global).resource)
       .flatMap { scraper =>
         allBuildsStream(scraper, rate = 5.seconds)
           .parJoin(Branch.all.size)

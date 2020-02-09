@@ -8,10 +8,12 @@ import cats.data.EitherT
 import cats.effect._
 import cats.implicits._
 import cats._
-import org.http4s.Uri
-import org.http4s.client.blaze.BlazeClientBuilder
+import io.chrisdavenport.log4cats.Logger
+import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+import org.http4s.Status.Successful
+import org.http4s.{Request, Uri}
+import org.http4s.client.Client
 
-import scala.concurrent.ExecutionContext
 import scala.util.matching.{Regex, UnanchoredRegex}
 
 /**
@@ -20,10 +22,29 @@ import scala.util.matching.{Regex, UnanchoredRegex}
   *
   * Effects are executed within `F`.
   */
-trait Scraper[F[_]] {
+class Scraper[F[_]: Sync](val httpClient: Client[F]) {
+
+  protected implicit def unsafeLogger: Logger[F] =
+    Slf4jLogger.getLogger[F]
 
   /** Downloads the content of a Uri as a [[String]]. */
-  protected def fetch(uri: Uri): EitherT[F, DownloadError, String]
+  protected def fetch(uri: Uri): EitherT[F, DownloadError, String] = {
+    val request = Request[F](uri = uri, headers = ChaosHeaders.headers)
+
+    EitherT(
+      Logger[F].info(s"GET $uri") *>
+        httpClient
+          .fetch[Either[DownloadError, String]](request) {
+            case Successful(response) =>
+              response
+                .attemptAs[String]
+                .leftMap[DownloadError](DecodeError)
+                .value
+            case failedResponse => Sync[F].pure(Left(HTTPError(failedResponse)))
+          }
+          .handleError(error => Left(NetworkError(error)))
+    )
+  }
 
   /** Downloads the main client HTML for a [[Branch]]. */
   def fetchClient(branch: Branch): EitherT[F, DownloadError, String] =
@@ -104,17 +125,4 @@ trait Scraper[F[_]] {
       buildNumber <- fetchBuildNumber(branch, assets)
     } yield Build(branch = branch, buildNumber = buildNumber, assets = assets)
   }
-}
-
-object Scraper {
-
-  /** Creates an Http4s-based scraper from an execution context. */
-  def apply[F[_]: ConcurrentEffect](
-    ec: ExecutionContext
-  ): Resource[F, Scraper[F]] =
-    BlazeClientBuilder[F](ec).resource.map(new Http4sScraper[F](_))
-
-  /** Creates an Http4s-based scraper from the global execution context. */
-  def global[F[_]: ConcurrentEffect]: Resource[F, Scraper[F]] =
-    apply(ExecutionContext.global)
 }
