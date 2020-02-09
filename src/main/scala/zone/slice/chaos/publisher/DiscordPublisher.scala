@@ -11,11 +11,10 @@ import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import org.http4s.Method._
 import org.http4s.circe._
-import org.http4s.client.Client
+import org.http4s.client.{Client, UnexpectedStatus}
 import org.http4s.client.dsl.Http4sClientDsl
+import org.http4s.Status
 import io.circe._
-import org.http4s.Response
-import org.http4s.Status.Successful
 
 class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
     extends Publisher[F, DiscordPublisherError]
@@ -43,28 +42,29 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
       )
     )
 
-    EitherT(
-      Logger[F].info(
-        show"Publishing ${build.branch} ${build.buildNumber} to Discord webhook ${webhook.id}"
-      ) *> httpClient
-        .fetch[Either[DiscordPublisherError, Unit]](
-          POST(body, webhook.uri, Headers.userAgentHeader)
-        ) {
-          case Successful(_) => Sync[F].pure(Right(()))
-          case failedResponse =>
-            Sync[F].pure(Left(DiscordApiError(failedResponse)))
-        }
-        .handleError(error => Left(NetworkError(error)))
-    )
+    val request = httpClient
+      .expect[Unit](POST(body, webhook.uri, Headers.userAgentHeader))
+      .attemptT
+      .leftMap[DiscordPublisherError] {
+        case UnexpectedStatus(status) => DiscordApiError(status)
+        case throwable                => NetworkError(throwable)
+      }
+
+    val message =
+      show"Publishing ${build.branch} ${build.buildNumber} to Discord webhook ${webhook.id}"
+    for {
+      _ <- EitherT.right(Logger[F].info(message))
+      _ <- request
+    } yield ()
   }
 }
 
 object DiscordPublisher {
   sealed trait DiscordPublisherError extends Exception
-  final case class DiscordApiError[F[_]](response: Response[F])
+  final case class DiscordApiError(status: Status)
       extends DiscordPublisherError {
     override def getMessage: String =
-      s"Failed to publish to Discord: ${response.status.code} ${response.status.reason}"
+      s"Failed to publish to Discord: ${status.code} ${status.reason}"
   }
   final case class NetworkError(error: Throwable)
       extends DiscordPublisherError {
