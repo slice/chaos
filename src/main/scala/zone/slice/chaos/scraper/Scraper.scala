@@ -7,7 +7,6 @@ import errors._
 import cats.data.EitherT
 import cats.effect._
 import cats.implicits._
-import cats._
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import org.http4s.Status.Successful
@@ -67,8 +66,8 @@ class Scraper[F[_]: Sync](val httpClient: Client[F]) {
 
     val assetTypes: Map[String => Asset, (UnanchoredRegex, ExtractorError)] =
       Map(
-        Asset.Script -> (scriptTagRegex, NoScripts),
-        Asset.Stylesheet -> (styleTagRegex, NoStylesheets)
+        Asset.Script -> ((scriptTagRegex, NoScripts)),
+        Asset.Stylesheet -> ((styleTagRegex, NoStylesheets))
       )
 
     assetTypes
@@ -82,9 +81,8 @@ class Scraper[F[_]: Sync](val httpClient: Client[F]) {
   }
 
   /** Fetches and extracts the build number from a [[Seq]] of [[Asset]]s. */
-  def fetchBuildNumber(branch: Branch, assets: Seq[Asset])(
-    implicit monad: Monad[F]
-  ): EitherT[F, ScraperError, Int] = {
+  def fetchBuildNumber(branch: Branch,
+                       assets: Seq[Asset]): EitherT[F, ScraperError, Int] = {
     val scripts = assets.filter(_.isInstanceOf[Asset.Script])
     val buildMetadataRegex =
       raw"Build Number: (\d+), Version Hash: ([a-f0-9]+)".r.unanchored
@@ -112,9 +110,7 @@ class Scraper[F[_]: Sync](val httpClient: Client[F]) {
     * This takes care of downloading the branch's HTML, finding [[discord.Asset assets]],
     * extracting the build number, etc.
     */
-  def scrape(
-    branch: Branch
-  )(implicit monad: Monad[F]): EitherT[F, ScraperError, Build] = {
+  def scrape(branch: Branch): EitherT[F, ScraperError, Build] = {
     for {
       pageText <- fetchClient(branch)
         .leftMap[ScraperError](ScraperError.Download)
