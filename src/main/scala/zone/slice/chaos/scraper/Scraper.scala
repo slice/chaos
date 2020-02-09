@@ -9,9 +9,8 @@ import cats.effect._
 import cats.implicits._
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
-import org.http4s.Status.Successful
-import org.http4s.{Request, Uri}
-import org.http4s.client.Client
+import org.http4s.{MessageFailure, Request, Uri}
+import org.http4s.client.{Client, UnexpectedStatus}
 
 import scala.util.matching.{Regex, UnanchoredRegex}
 
@@ -30,19 +29,17 @@ class Scraper[F[_]: Sync](val httpClient: Client[F]) {
   protected def fetch(uri: Uri): EitherT[F, DownloadError, String] = {
     val request = Request[F](uri = uri, headers = Headers.headers)
 
-    EitherT(
-      Logger[F].info(s"GET $uri") *>
-        httpClient
-          .fetch[Either[DownloadError, String]](request) {
-            case Successful(response) =>
-              response
-                .attemptAs[String]
-                .leftMap[DownloadError](DecodeError)
-                .value
-            case failedResponse => Sync[F].pure(Left(HTTPError(failedResponse)))
-          }
-          .handleError(error => Left(NetworkError(error)))
-    )
+    for {
+      _ <- EitherT.right(Logger[F].info(s"GETting $uri"))
+      text <- httpClient
+        .expect[String](request)
+        .attemptT
+        .leftMap[DownloadError] {
+          case UnexpectedStatus(status) => HTTPError(status)
+          case failure: MessageFailure  => DecodeError(failure)
+          case throwable                => NetworkError(throwable)
+        }
+    } yield text
   }
 
   /** Downloads the main client HTML for a [[Branch]]. */
