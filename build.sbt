@@ -1,7 +1,32 @@
-ThisBuild / organization := "zone.slice"
-ThisBuild / organizationHomepage := Some(url("https://slice.zone"))
-ThisBuild / scalaVersion := "2.13.1"
-ThisBuild / version := "0.0.0"
+// format: off
+inThisBuild(Seq(
+    organization := "zone.slice",
+    organizationHomepage := Some(url("https://slice.zone")),
+    scalaVersion := "2.13.1",
+    version := "0.0.0"
+))
+// format: on
+
+val catsVersion = "2.1.0"
+val http4sVersion = "0.21.0-RC5"
+val circeVersion = "0.13.0"
+val log4catsVersion = "1.0.1"
+val fs2Version = "2.2.1"
+val logbackVersion = "1.2.3"
+
+val dependencies = Seq(
+  "org.http4s" %% "http4s-blaze-client" % http4sVersion,
+  "org.http4s" %% "http4s-dsl" % http4sVersion,
+  "org.http4s" %% "http4s-circe" % http4sVersion,
+  "io.circe" %% "circe-core" % circeVersion,
+  "io.circe" %% "circe-literal" % circeVersion,
+  "org.typelevel" %% "cats-core" % catsVersion,
+  "org.typelevel" %% "cats-effect" % catsVersion,
+  "co.fs2" %% "fs2-core" % fs2Version,
+  "io.chrisdavenport" %% "log4cats-core" % log4catsVersion,
+  "io.chrisdavenport" %% "log4cats-slf4j" % log4catsVersion,
+  "ch.qos.logback" % "logback-classic" % logbackVersion
+)
 
 lazy val root = (project in file("."))
   .enablePlugins(BuildInfoPlugin)
@@ -14,20 +39,7 @@ lazy val root = (project in file("."))
       Developer("slice", "slice", "slice@slice.zone", url("https://slice.zone"))
     ),
     resolvers += Resolver.mavenCentral,
-    resolvers += Resolver.sonatypeRepo("snapshots"),
-    libraryDependencies ++= Seq(
-      "org.http4s" %% "http4s-blaze-client" % "0.21.0-SNAPSHOT",
-      "org.http4s" %% "http4s-dsl" % "0.21.0-SNAPSHOT",
-      "org.http4s" %% "http4s-circe" % "0.21.0-SNAPSHOT",
-      "io.circe" %% "circe-core" % "0.13.0",
-      "io.circe" %% "circe-literal" % "0.13.0",
-      "org.typelevel" %% "cats-core" % "2.1.0",
-      "org.typelevel" %% "cats-effect" % "2.1.0",
-      "co.fs2" %% "fs2-core" % "2.2.1",
-      "io.chrisdavenport" %% "log4cats-core" % "1.0.1",
-      "io.chrisdavenport" %% "log4cats-slf4j" % "1.0.1",
-      "ch.qos.logback" % "logback-classic" % "1.2.3"
-    ),
+    libraryDependencies ++= dependencies,
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, homepage),
     buildInfoPackage := "zone.slice.chaos"
   )
