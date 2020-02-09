@@ -17,6 +17,8 @@ import org.http4s.Status
 import io.circe._
 import io.circe.literal._
 
+import scala.util.control.NoStackTrace
+
 class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
     extends Publisher[F, DiscordPublisherError]
     with Http4sClientDsl[F] {
@@ -72,12 +74,14 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
 object DiscordPublisher {
   sealed trait DiscordPublisherError extends Exception
   final case class DiscordApiError(status: Status)
-      extends DiscordPublisherError {
+      extends DiscordPublisherError
+      with NoStackTrace {
     override def getMessage: String =
       s"Failed to publish to Discord: ${status.code} ${status.reason}"
   }
   final case class NetworkError(error: Throwable)
-      extends DiscordPublisherError {
+      extends DiscordPublisherError
+      with NoStackTrace {
     override def getMessage: String =
       s"Failed to send request to Discord: ${error.getMessage}"
   }
