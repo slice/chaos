@@ -29,6 +29,13 @@ sealed trait Branch {
     scraper: Scraper[F]
   ): Stream[F, Either[ScraperError, Build]] =
     Stream.repeatEval(scraper.scrape(this).value)
+
+  /** The "color" of this branch. */
+  def color: Int = this match {
+    case Branch.Stable => 0x7289da
+    case Branch.PTB    => 0x99aab5
+    case Branch.Canary => 0xf1c40f
+  }
 }
 
 object Branch {
