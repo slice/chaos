@@ -29,7 +29,7 @@ class Scraper[F[_]: Sync](val httpClient: Client[F]) {
 
   /** Downloads the content of a Uri as a [[String]]. */
   protected def fetch(uri: Uri): EitherT[F, DownloadError, String] = {
-    val request = Request[F](uri = uri, headers = ChaosHeaders.headers)
+    val request = Request[F](uri = uri, headers = Headers.headers)
 
     EitherT(
       Logger[F].info(s"GET $uri") *>

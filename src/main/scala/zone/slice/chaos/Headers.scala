@@ -1,10 +1,9 @@
-package zone.slice.chaos.scraper
+package zone.slice.chaos
 
-import org.http4s.Headers
+import org.http4s.{Headers => Http4sHeaders}
 import org.http4s.headers.{AgentComment, AgentProduct, `User-Agent`}
-import zone.slice.chaos.BuildInfo
 
-object ChaosHeaders {
+object Headers {
   def userAgentHeader: `User-Agent` = {
     val mainProduct = AgentProduct(BuildInfo.name, Some(BuildInfo.version))
     val otherTokens = List(
@@ -18,5 +17,5 @@ object ChaosHeaders {
     })
   }
 
-  lazy val headers: Headers = Headers.of(userAgentHeader)
+  lazy val headers: Http4sHeaders = Http4sHeaders.of(userAgentHeader)
 }
