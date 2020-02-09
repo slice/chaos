@@ -15,6 +15,7 @@ import org.http4s.client.{Client, UnexpectedStatus}
 import org.http4s.client.dsl.Http4sClientDsl
 import org.http4s.Status
 import io.circe._
+import io.circe.literal._
 
 class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
     extends Publisher[F, DiscordPublisherError]
@@ -23,27 +24,36 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
   protected implicit def unsafeLogger: Logger[F] =
     Slf4jLogger.getLogger[F]
 
-  override def publish(
-    build: Build
-  ): EitherT[F, DiscordPublisherError, Unit] = {
-    val description = build.assets
+  protected def embedForBuild(build: Build): Json = {
+    val title = show"${build.branch} ${build.buildNumber}"
+    val assetList = build.assets
       .map(asset => s"[`${asset.filename}`](${asset.uri})")
       .mkString("\n")
 
-    val str = Json.fromString _
-    val body: Json = Json.obj(
-      "username" -> str("chaos"),
-      "embeds" -> Json.arr(
-        Json.obj(
-          "title" -> str(s"${build.branch} ${build.buildNumber}"),
-          "description" -> str(description),
-          "color" -> Json.fromInt(build.branch.color)
-        )
-      )
-    )
+    val embed = json"""
+      {
+        "title": $title,
+        "color": ${build.branch.color},
+        "fields": [
+          {"name": "Assets", "value": $assetList}
+        ]
+      }
+    """
 
+    json"""
+      {
+        "username": "chaos",
+        "embeds": [$embed]
+      }
+    """
+  }
+
+  override def publish(
+    build: Build
+  ): EitherT[F, DiscordPublisherError, Unit] = {
+    val embed = embedForBuild(build)
     val request = httpClient
-      .expect[Unit](POST(body, webhook.uri, Headers.userAgentHeader))
+      .expect[Unit](POST(embed, webhook.uri, Headers.userAgentHeader))
       .attemptT
       .leftMap[DiscordPublisherError] {
         case UnexpectedStatus(status) => DiscordApiError(status)
