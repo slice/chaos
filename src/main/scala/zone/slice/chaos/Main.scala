@@ -48,15 +48,16 @@ object Main extends IOApp {
   def publish[F[_]: ConcurrentEffect](
     build: Build
   )(implicit httpClient: Client[F]): EitherT[F, Exception, Unit] = {
-    EitherT[F, Exception, Unit](
-      Logger[F]
-        .info(
-          show"Fresh build for ${build.branch} (${build.buildNumber}), publishing"
-        )
-        .as(Right(()))
-    ) *> new DiscordPublisher[F](Webhook(BigInt("0"), "..."), httpClient)
-      .publish(build)
-      .leftWiden[Exception]
+    val (id, token) = (BigInt("0"), "...")
+
+    val message =
+      show"Fresh build for ${build.branch} (${build.buildNumber}), publishing"
+    for {
+      _ <- EitherT.right(Logger[F].info(message))
+      _ <- new DiscordPublisher[F](Webhook(id, token), httpClient)
+        .publish(build)
+        .leftWiden[Exception]
+    } yield ()
   }
 
   def scanBuild[F[_]: ConcurrentEffect: Client](freshnessMap: BuildMap,
