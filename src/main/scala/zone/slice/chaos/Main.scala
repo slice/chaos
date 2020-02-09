@@ -13,6 +13,8 @@ import fs2._
 import scala.concurrent.duration._
 
 object Main extends IOApp {
+  type BuildMap = Map[Branch, Option[Int]]
+
   // ~_~
   protected implicit def unsafeLogger[F[_]: Sync]: Logger[F] =
     Slf4jLogger.getLogger[F]
@@ -38,6 +40,20 @@ object Main extends IOApp {
         }
     }
 
+  def notify[F[_]: ConcurrentEffect](build: Build): F[Unit] = {
+    Logger[F].info(show"notifying for $build")
+  }
+
+  def scanBuild[F[_]: ConcurrentEffect](freshnessMap: BuildMap,
+                                        build: Build): F[BuildMap] =
+    if (freshnessMap
+          .getOrElse(build.branch, none[Int])
+          .forall(build.buildNumber > _))
+      notify[F](build)
+        .as(freshnessMap.updated(build.branch, build.buildNumber.some))
+    else
+      Sync[F].pure(freshnessMap)
+
   def program[F[_]: ConcurrentEffect: Timer]: F[Unit] =
     Stream
       .resource(Scraper.global[F])
@@ -45,10 +61,20 @@ object Main extends IOApp {
         allBuildsStream(scraper, rate = 5.seconds)
           .parJoin(Branch.all.size)
       }
+      .evalScan(Branch.all.map((_, none[Int])).toMap) {
+        (freshnessMap, result) =>
+          result match {
+            case Right(build) => scanBuild(freshnessMap, build)
+            case _            => Sync[F].pure(freshnessMap)
+          }
+      }
       .compile
       .drain
 
   override def run(args: List[String]): IO[ExitCode] = {
-    Logger[IO].info("starting scrape loop") *> program[IO].as(ExitCode.Success)
+    for {
+      _ <- Logger[IO].info("starting scrape loop")
+      _ <- program[IO]
+    } yield ExitCode.Success
   }
 }
