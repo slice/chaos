@@ -35,9 +35,9 @@ class Scraper[F[_]: Sync](val httpClient: Client[F]) {
         .expect[String](request)
         .attemptT
         .leftMap[DownloadError] {
-          case UnexpectedStatus(status) => HTTPError(status)
-          case failure: MessageFailure  => DecodeError(failure)
-          case throwable                => NetworkError(throwable)
+          case UnexpectedStatus(status) => DownloadError.HTTPError(status)
+          case failure: MessageFailure  => DownloadError.DecodeError(failure)
+          case throwable                => DownloadError.NetworkError(throwable)
         }
     } yield text
   }
@@ -63,8 +63,8 @@ class Scraper[F[_]: Sync](val httpClient: Client[F]) {
 
     val assetTypes: Map[String => Asset, (UnanchoredRegex, ExtractorError)] =
       Map(
-        Asset.Script -> ((scriptTagRegex, NoScripts)),
-        Asset.Stylesheet -> ((styleTagRegex, NoStylesheets))
+        Asset.Script -> ((scriptTagRegex, ExtractorError.NoScripts)),
+        Asset.Stylesheet -> ((styleTagRegex, ExtractorError.NoStylesheets))
       )
 
     assetTypes
@@ -86,7 +86,7 @@ class Scraper[F[_]: Sync](val httpClient: Client[F]) {
 
     for {
       mainScript <- EitherT
-        .fromEither[F](scripts.lastOption.toRight(NoScripts))
+        .fromEither[F](scripts.lastOption.toRight(ExtractorError.NoScripts))
         .leftMap[ScraperError](ScraperError.Extractor)
       text <- fetch(branch.uri / "assets" / mainScript.filename.path)
         .leftMap[ScraperError](ScraperError.Download)
@@ -94,7 +94,7 @@ class Scraper[F[_]: Sync](val httpClient: Client[F]) {
         .fromEither[F](
           buildMetadataRegex
             .findFirstMatchIn(text)
-            .toRight(NoBuildNumber)
+            .toRight(ExtractorError.NoBuildNumber)
         )
         .leftMap[ScraperError](ScraperError.Extractor)
         .map(_.group(1).toInt)

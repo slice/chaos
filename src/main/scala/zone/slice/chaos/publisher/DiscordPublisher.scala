@@ -72,13 +72,19 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
 }
 
 object DiscordPublisher {
+
+  /** An error thrown from a [[DiscordPublisher]]. */
   sealed trait DiscordPublisherError extends Exception
+
+  /** Thrown when the Discord API returns an error. */
   final case class DiscordApiError(status: Status)
       extends DiscordPublisherError
       with NoStackTrace {
     override def getMessage: String =
       s"Failed to publish to Discord: ${status.code} ${status.reason}"
   }
+
+  /** Thrown when something went wrong with the network somewhere. */
   final case class NetworkError(error: Throwable)
       extends DiscordPublisherError
       with NoStackTrace {
