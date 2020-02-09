@@ -39,9 +39,9 @@ object Main extends IOApp {
         .zipRight(branch.buildStream(new Scraper(httpClient)))
         .evalTap {
           case Left(error) =>
-            Logger[F].error(error)(show"failed to scrape $branch")
+            Logger[F].error(error)(show"Failed to scrape $branch")
           case Right(build) =>
-            Logger[F].info(show"scraped $branch: $build")
+            Logger[F].debug(show"Scraped $branch: $build")
         }
     }
 

@@ -30,7 +30,7 @@ class Scraper[F[_]: Sync](val httpClient: Client[F]) {
     val request = Request[F](uri = uri, headers = Headers.headers)
 
     for {
-      _ <- EitherT.right(Logger[F].info(s"GETting $uri"))
+      _ <- EitherT.right(Logger[F].debug(s"GETting $uri"))
       text <- httpClient
         .expect[String](request)
         .attemptT
