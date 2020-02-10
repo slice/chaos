@@ -56,6 +56,8 @@ object Main extends IOApp {
       .map {
         case DiscordPublisherSetting(id, token) =>
           new DiscordPublisher[F](Webhook(id, token), httpClient)
+        case StdoutPublisherSetting(format) =>
+          new StdoutPublisher[F](format)
       }
       .map(_.asInstanceOf[Publisher[F, Exception]]) // uhh
 

@@ -12,10 +12,12 @@ object PublisherSetting {
     Decoder.instance { cursor =>
       cursor.downField("type").as[String].flatMap {
         case "discord" => cursor.as[DiscordPublisherSetting]
+        case "stdout"  => cursor.as[StdoutPublisherSetting]
       }
     }
 }
 
+final case class StdoutPublisherSetting(format: String) extends PublisherSetting
 final case class DiscordPublisherSetting(id: BigInt, token: String)
     extends PublisherSetting
 
