@@ -48,19 +48,24 @@ object Main extends IOApp {
         }
     }
 
-  def publish[F[_]: ConcurrentEffect](build: Build)(
-    implicit httpClient: Client[F],
-    config: Config
-  ): EitherT[F, Exception, Unit] = {
-    val publishers = config.publishers
+  /** Builds a list of [[Publisher]]s from a list of [[PublisherSetting]]s. */
+  def buildPublishers[F[_]: Sync](
+    configured: List[PublisherSetting]
+  )(implicit httpClient: Client[F]): List[Publisher[F, Exception]] =
+    configured
       .map {
         case DiscordPublisherSetting(id, token) =>
           new DiscordPublisher[F](Webhook(id, token), httpClient)
         case StdoutPublisherSetting(format) =>
           new StdoutPublisher[F](format)
       }
-      .map(_.asInstanceOf[Publisher[F, Exception]]) // uhh
+      .map(_.asInstanceOf[Publisher[F, Exception]]) // :thinking:
 
+  /** Publishes a [[Build]] to a list of [[Publisher]]s. */
+  def publish[F[_]: ConcurrentEffect](
+    build: Build,
+    publishers: List[Publisher[F, Exception]]
+  ): EitherT[F, Exception, Unit] = {
     val message =
       show"Fresh build for ${build.branch} (${build.buildNumber}), publishing"
     for {
@@ -69,26 +74,22 @@ object Main extends IOApp {
     } yield ()
   }
 
-  def scanBuild[F[_]: ConcurrentEffect: Client](
+  /** Processes a single build, updating a [[BuildMap]] with the latest build. */
+  def processBuild[F[_]: ConcurrentEffect: Client](
     freshnessMap: BuildMap,
-    build: Build
-  )(implicit config: Config): F[BuildMap] =
+    build: Build,
+    config: Config
+  ): F[BuildMap] =
     if (freshnessMap
           .getOrElse(build.branch, none[Int])
           .forall(build.buildNumber > _))
-      publish[F](build).value
-        .flatTap {
-          case Left(error) =>
-            Logger[F].error(error)(show"Failed to publish $build")
-          case _ => Sync[F].pure(())
-        }
+      publish[F](build, publishers = buildPublishers(config.publishers))
+        .valueOrF(Logger[F].error(_)(show"Failed to publish $build"))
         .as(freshnessMap.updated(build.branch, build.buildNumber.some))
     else
       Sync[F].pure(freshnessMap)
 
-  def scrapeAndPublishLoop[F[_]: ConcurrentEffect: Timer](
-    implicit config: Config
-  ): F[Unit] =
+  def poller[F[_]: ConcurrentEffect: Timer](config: Config): F[Unit] =
     Stream
       .resource(BlazeClientBuilder[F](ExecutionContext.global).resource)
       .flatMap { implicit httpClient =>
@@ -97,13 +98,20 @@ object Main extends IOApp {
           .evalScan(Branch.all.map((_, none[Int])).toMap) {
             (freshnessMap, result) =>
               result match {
-                case Right(build) => scanBuild(freshnessMap, build)
-                case _            => Sync[F].pure(freshnessMap)
+                case Right(build) =>
+                  processBuild(freshnessMap, build, config = config)
+                case _ => Sync[F].pure(freshnessMap)
               }
           }
       }
       .compile
       .drain
+
+  def startPoller[F[_]: ConcurrentEffect: Timer](config: Config): F[ExitCode] =
+    for {
+      _ <- Logger[F].info(show"Starting poller (interval: ${config.interval})")
+      _ <- poller[F](config)
+    } yield ExitCode.Success
 
   def program[F[_]: ConcurrentEffect: Timer]: F[ExitCode] =
     parser
@@ -112,11 +120,9 @@ object Main extends IOApp {
       .foldF(
         error =>
           Sync[F]
-            .delay(Console.err.println(s"Failed to load `chaos.conf`: $error"))
+            .delay(Console.err.println(s"Failed to load config file: $error"))
             .as(ExitCode.Error),
-        implicit config =>
-          Logger[F].info("Starting scrape and publish loop") *>
-            scrapeAndPublishLoop[F].as(ExitCode.Success)
+        startPoller(_)
       )
 
   override def run(args: List[String]): IO[ExitCode] =
