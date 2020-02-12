@@ -2,25 +2,20 @@ package zone.slice.chaos
 package publisher
 
 import discord.{Build, Webhook}
-import DiscordPublisher._
 
 import cats.implicits._
-import cats.data.EitherT
 import cats.effect.Sync
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import org.http4s.Method._
 import org.http4s.circe._
-import org.http4s.client.{Client, UnexpectedStatus}
+import org.http4s.client.Client
 import org.http4s.client.dsl.Http4sClientDsl
-import org.http4s.Status
 import io.circe._
 import io.circe.literal._
 
-import scala.util.control.NoStackTrace
-
 class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
-    extends Publisher[F, DiscordPublisherError]
+    extends Publisher[F]
     with Http4sClientDsl[F] {
 
   protected implicit def unsafeLogger: Logger[F] =
@@ -50,45 +45,13 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
     """
   }
 
-  override def publish(
-    build: Build
-  ): EitherT[F, DiscordPublisherError, Unit] = {
-    val embed = embedForBuild(build)
-    val request = httpClient
-      .expect[Unit](POST(embed, webhook.uri, Headers.userAgentHeader))
-      .attemptT
-      .leftMap[DiscordPublisherError] {
-        case UnexpectedStatus(status) => DiscordApiError(status)
-        case throwable                => NetworkError(throwable)
-      }
-
+  override def publish(build: Build): F[Unit] = {
     val message =
       show"Publishing ${build.branch} ${build.buildNumber} to Discord webhook ${webhook.id}"
     for {
-      _ <- EitherT.right(Logger[F].info(message))
-      _ <- request
+      _ <- Logger[F].info(message)
+      request = POST(embedForBuild(build), webhook.uri, Headers.userAgentHeader)
+      _ <- httpClient.expect[Unit](request)
     } yield ()
-  }
-}
-
-object DiscordPublisher {
-
-  /** An error thrown from a [[DiscordPublisher]]. */
-  sealed trait DiscordPublisherError extends Exception
-
-  /** Thrown when the Discord API returns an error. */
-  final case class DiscordApiError(status: Status)
-      extends DiscordPublisherError
-      with NoStackTrace {
-    override def getMessage: String =
-      s"Failed to publish to Discord: ${status.code} ${status.reason}"
-  }
-
-  /** Thrown when something went wrong with the network somewhere. */
-  final case class NetworkError(error: Throwable)
-      extends DiscordPublisherError
-      with NoStackTrace {
-    override def getMessage: String =
-      s"Failed to send request to Discord: ${error.getMessage}"
   }
 }

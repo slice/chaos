@@ -5,7 +5,6 @@ import publisher._
 import scraper._
 import scraper.errors._
 
-import cats.data.EitherT
 import cats.effect._
 import cats.implicits._
 import io.chrisdavenport.log4cats.Logger
@@ -51,7 +50,7 @@ object Main extends IOApp {
   /** Builds a list of [[Publisher]]s from a list of [[PublisherSetting]]s. */
   def buildPublishers[F[_]: Sync](
     configured: List[PublisherSetting]
-  )(implicit httpClient: Client[F]): List[Publisher[F, Exception]] =
+  )(implicit httpClient: Client[F]): List[Publisher[F]] =
     configured
       .map {
         case DiscordPublisherSetting(id, token) =>
@@ -59,17 +58,16 @@ object Main extends IOApp {
         case StdoutPublisherSetting(format) =>
           new StdoutPublisher[F](format)
       }
-      .map(_.asInstanceOf[Publisher[F, Exception]]) // :thinking:
 
   /** Publishes a [[Build]] to a list of [[Publisher]]s. */
   def publish[F[_]: ConcurrentEffect](
     build: Build,
-    publishers: List[Publisher[F, Exception]]
-  ): EitherT[F, Exception, Unit] = {
+    publishers: List[Publisher[F]]
+  ): F[Unit] = {
     val message =
       show"Fresh build for ${build.branch} (${build.buildNumber}), publishing"
     for {
-      _ <- EitherT.right(Logger[F].info(message))
+      _ <- Logger[F].info(message)
       _ <- publishers.map(_.publish(build)).sequence
     } yield ()
   }
@@ -84,7 +82,7 @@ object Main extends IOApp {
           .getOrElse(build.branch, none[Int])
           .forall(build.buildNumber > _))
       publish[F](build, publishers = buildPublishers(config.publishers))
-        .valueOrF(Logger[F].error(_)(show"Failed to publish $build"))
+        .handleErrorWith(Logger[F].error(_)(show"Failed to publish $build"))
         .as(freshnessMap.updated(build.branch, build.buildNumber.some))
     else
       Sync[F].pure(freshnessMap)
