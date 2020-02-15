@@ -19,8 +19,6 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 object Main extends IOApp {
-  type BuildMap = Map[Branch, Option[Int]]
-
   // ~_~
   protected implicit def unsafeLogger[F[_]: Sync]: Logger[F] =
     Slf4jLogger.getLogger[F]
@@ -72,10 +70,10 @@ object Main extends IOApp {
 
   /** Consumes a single build, returning an updated [[BuildMap]]. */
   def consumeBuild[F[_]: ConcurrentEffect: Client](
-    freshnessMap: BuildMap,
+    freshnessMap: BuildMap.Type,
     build: Build,
     config: Config
-  ): F[BuildMap] =
+  ): F[BuildMap.Type] =
     if (freshnessMap
           .getOrElse(build.branch, none[Int])
           .forall(build.buildNumber > _))
@@ -90,7 +88,7 @@ object Main extends IOApp {
     config: Config
   ): Stream[F, Unit] =
     allBuilds(rate = config.interval)
-      .evalScan(Branch.all.map((_, none[Int])).toMap) {
+      .evalScan(BuildMap.default) {
         case (freshnessMap, (branch, Left(error))) =>
           Logger[F]
             .error(error)(show"Failed to scrape $branch")
