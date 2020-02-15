@@ -2,6 +2,7 @@ package zone.slice.chaos
 package publisher
 
 import discord.{Build, Webhook}
+import scraper.Headers
 
 import cats.implicits._
 import cats.effect.Sync

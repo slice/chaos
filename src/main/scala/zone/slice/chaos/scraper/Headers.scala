@@ -1,7 +1,8 @@
 package zone.slice.chaos
+package scraper
 
 import org.http4s.{Headers => Http4sHeaders}
-import org.http4s.headers.{AgentComment, AgentProduct, `User-Agent`}
+import org.http4s.headers.{`User-Agent`, AgentComment, AgentProduct}
 
 object Headers {
   def userAgentHeader: `User-Agent` = {
