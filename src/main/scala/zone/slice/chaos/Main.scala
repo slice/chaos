@@ -99,7 +99,7 @@ object Main extends IOApp {
       .drain
 
   /** Starts the poller from a [[Config]]. */
-  def startPoller[F[_]: ConcurrentEffect: Timer](config: Config): F[ExitCode] =
+  def startPoller[F[_]: ConcurrentEffect: Timer](config: Config): F[Unit] =
     Logger[F].info(show"Starting poller (interval: ${config.interval})") *>
       Stream
         .resource(BlazeClientBuilder[F](ExecutionContext.global).resource)
@@ -108,7 +108,6 @@ object Main extends IOApp {
         }
         .compile
         .drain
-        .as(ExitCode.Success)
 
   def program[F[_]: ConcurrentEffect: Timer]: F[ExitCode] =
     parser
@@ -119,7 +118,7 @@ object Main extends IOApp {
           Sync[F]
             .delay(Console.err.println(s"Failed to load config file: $error"))
             .as(ExitCode.Error),
-        startPoller(_)
+        startPoller(_).as(ExitCode.Success)
       )
 
   override def run(args: List[String]): IO[ExitCode] =
