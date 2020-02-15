@@ -3,6 +3,7 @@ package discord
 
 import scraper._
 
+import io.circe.{Decoder, DecodingFailure}
 import fs2._
 import cats.Show
 import cats.effect._
@@ -56,4 +57,14 @@ object Branch {
   val all: List[Branch] = Stable :: PTB :: Canary :: Nil
 
   implicit val showBranch: Show[Branch] = Show.fromToString[Branch]
+
+  implicit val decodeBranch: Decoder[Branch] = Decoder.instance { cursor =>
+    cursor.as[String].flatMap {
+      case "canary" => Right(Canary)
+      case "ptb"    => Right(PTB)
+      case "stable" => Right(Stable)
+      case other =>
+        Left(DecodingFailure(s"$other is not a Discord branch", cursor.history))
+    }
+  }
 }

@@ -10,8 +10,10 @@ import cats.effect._
 import cats.implicits._
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+import io.circe.DecodingFailure
 import io.circe.config.parser
-import io.circe.generic.auto._
+import io.circe.generic.extras.Configuration
+import io.circe.generic.extras.auto._
 import io.circe.config.syntax._
 import fs2._
 import org.http4s.client.Client
@@ -48,29 +50,32 @@ object Main extends IOApp {
       }
       .parJoin(Branch.all.size)
 
-  /** Builds a list of [[Publisher]]s from a list of [[PublisherSetting]]s. */
-  def buildPublishers[F[_]: Sync](
-    configured: List[PublisherSetting]
-  )(implicit httpClient: Client[F]): List[Publisher[F]] =
-    configured
-      .map {
-        case DiscordPublisherSetting(id, token) =>
-          new DiscordPublisher[F](Webhook(id, token), httpClient)
-        case StdoutPublisherSetting(format) =>
-          new StdoutPublisher[F](format)
-      }
+  /** Builds a [[Publisher]] from a [[PublisherSetting]]. */
+  def buildPublisher[F[_]: Sync](
+    setting: PublisherSetting
+  )(implicit httpClient: Client[F]): Publisher[F] = setting match {
+    case DiscordPublisherSetting(id, token, _) =>
+      new DiscordPublisher[F](Webhook(id, token), httpClient)
+    case StdoutPublisherSetting(format, _) =>
+      new StdoutPublisher[F](format)
+  }
 
-  /** Publishes a [[Build]] to a list of [[Publisher]]s. */
-  def publish[F[_]: ConcurrentEffect](
+  /** Publishes a [[Build]] to a list of [[PublisherSetting]]s. */
+  def publish[F[_]: ConcurrentEffect: Client](
     build: Build,
-    publishers: List[Publisher[F]]
+    publisherSettings: List[PublisherSetting]
   ): F[Unit] = {
-    val message =
-      show"Fresh build for ${build.branch} (${build.buildNumber}), publishing"
-    for {
-      _ <- Logger[F].info(message)
-      _ <- publishers.map(_.publish(build)).sequence
-    } yield ()
+    publisherSettings
+      .filter(_.branches.contains(build.branch))
+      .map(buildPublisher[F])
+      .map(
+        publisher =>
+          Logger[F]
+            .info(s"Publishing fresh ${build.branch} build to $publisher")
+            *> publisher.publish(build)
+      )
+      .sequence
+      .void
   }
 
   /** Consumes a single build, returning an updated [[BuildMap]]. */
@@ -82,7 +87,7 @@ object Main extends IOApp {
     if (freshnessMap
           .getOrElse(build.branch, none[Int])
           .forall(build.buildNumber > _))
-      publish[F](build, publishers = buildPublishers(config.publishers))
+      publish[F](build, config.publishers)
         .handleErrorWith(Logger[F].error(_)(show"Failed to publish $build"))
         .as(freshnessMap.updated(build.branch, build.buildNumber.some))
     else
@@ -116,6 +121,9 @@ object Main extends IOApp {
 
   def eput[F[_]: Sync](message: String): F[Unit] =
     Sync[F].delay(Console.err.println(message))
+
+  implicit val circeConfiguration: Configuration =
+    Configuration.default.withDefaults
 
   def program[F[_]: ConcurrentEffect: Timer]: F[ExitCode] =
     parser

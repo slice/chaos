@@ -24,6 +24,7 @@ val dependencies = Seq(
   "io.circe" %% "circe-literal" % circeVersion,
   "io.circe" %% "circe-generic" % circeVersion,
   "io.circe" %% "circe-config" % circeConfigVersion,
+  "io.circe" %% "circe-generic-extras" % circeVersion,
   "org.typelevel" %% "cats-core" % catsVersion,
   "org.typelevel" %% "cats-effect" % catsVersion,
   "co.fs2" %% "fs2-core" % fs2Version,
