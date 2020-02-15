@@ -65,6 +65,14 @@ publishers: [
 ]
 ```
 
+chaos will only scrape from the branches that you specify in each publisher. By
+default, a publisher will publish from all branches. The above configuration
+will scrape from all branches because the `stdout` publisher uses the
+aforementioned default value, therefore prompting chaos to scrape from all
+branches. If it had `branches: ["canary"]` like the `discord` publisher before
+it, then only the Canary branch would ever be polled from, since all publishers
+only care about Canary builds.
+
 Now, run chaos with `java`:
 
 ```sh

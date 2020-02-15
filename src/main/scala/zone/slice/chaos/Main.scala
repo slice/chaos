@@ -36,12 +36,13 @@ object Main extends IOApp {
   ): Stream[F, FiniteDuration] =
     Stream(0.seconds) ++ Stream.awakeEvery[F](rate)
 
-  /** A metered fs2 Stream of all builds from all branches. */
-  def allBuilds[F[_]: ConcurrentEffect: Timer](rate: FiniteDuration)(
+  /** A metered fs2 Stream of all builds from some branches. */
+  def scrapeStream[F[_]: ConcurrentEffect: Timer](branches: Set[Branch],
+                                                  rate: FiniteDuration)(
     implicit httpClient: Client[F]
   ): Stream[F, (Branch, Either[Throwable, Build])] =
     Stream
-      .emits(Branch.all.toList)
+      .emits(branches.toList)
       .map { branch =>
         eagerAwakeEvery(rate)
           .as(branch)
@@ -96,17 +97,28 @@ object Main extends IOApp {
   /** Polls and publishes builds from all branches forever. */
   def poller[F[_]: ConcurrentEffect: Timer: Client](
     config: Config
-  ): Stream[F, Unit] =
-    allBuilds(rate = config.interval)
-      .evalScan(BuildMap.default) {
-        case (freshnessMap, (branch, Left(error))) =>
-          Logger[F]
-            .error(error)(show"Failed to scrape $branch")
-            .as(freshnessMap)
-        case (freshnessMap, (_, Right(build))) =>
-          consumeBuild(freshnessMap, build, config = config)
-      }
-      .drain
+  ): Stream[F, Unit] = {
+    // Compute the branches that we have to scrape from. If all publishers are
+    // configured to only scrape from the Canary branch, then we can simply only
+    // scrape from that branch.
+    val specifiedBranches = config.publishers.flatMap(_.branches).toSet
+    val branches =
+      if (specifiedBranches.isEmpty) Branch.all else specifiedBranches
+
+    Stream.eval(
+      Logger[F].info(show"Scraping ${branches.size} branch(es): ${branches}")
+    ) ++
+      scrapeStream(branches, rate = config.interval)
+        .evalScan(BuildMap.default) {
+          case (freshnessMap, (branch, Left(error))) =>
+            Logger[F]
+              .error(error)(show"Failed to scrape $branch")
+              .as(freshnessMap)
+          case (freshnessMap, (_, Right(build))) =>
+            consumeBuild(freshnessMap, build, config = config)
+        }
+        .drain
+  }
 
   /** Starts the poller from a [[Config]]. */
   def startPoller[F[_]: ConcurrentEffect: Timer](config: Config): F[Unit] =
