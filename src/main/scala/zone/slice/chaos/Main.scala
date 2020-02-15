@@ -41,7 +41,7 @@ object Main extends IOApp {
     implicit httpClient: Client[F]
   ): Stream[F, (Branch, Either[Throwable, Build])] =
     Stream
-      .emits(Branch.all)
+      .emits(Branch.all.toList)
       .map { branch =>
         eagerAwakeEvery(rate)
           .as(branch)

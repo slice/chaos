@@ -54,7 +54,7 @@ object Branch {
   }
 
   /** The list of all branches. */
-  val all: List[Branch] = Stable :: PTB :: Canary :: Nil
+  val all: Set[Branch] = Set(Stable, PTB, Canary)
 
   implicit val showBranch: Show[Branch] = Show.fromToString[Branch]
 

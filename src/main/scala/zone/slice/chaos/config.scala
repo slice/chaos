@@ -10,8 +10,8 @@ import scala.concurrent.duration.FiniteDuration
 
 sealed trait PublisherSetting {
 
-  /** A list of branches to only builds publish from. */
-  def branches: List[Branch]
+  /** A [[Set]] of branches to only builds publish from. */
+  def branches: Set[Branch]
 }
 
 object PublisherSetting {
@@ -28,11 +28,11 @@ object PublisherSetting {
 }
 
 final case class StdoutPublisherSetting(format: String,
-                                        branches: List[Branch] = Branch.all)
+                                        branches: Set[Branch] = Branch.all)
     extends PublisherSetting
 final case class DiscordPublisherSetting(id: BigInt,
                                          token: String,
-                                         branches: List[Branch] = Branch.all)
+                                         branches: Set[Branch] = Branch.all)
     extends PublisherSetting
 
 case class Config(interval: FiniteDuration, publishers: List[PublisherSetting])
