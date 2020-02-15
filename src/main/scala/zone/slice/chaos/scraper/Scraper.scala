@@ -73,13 +73,12 @@ class Scraper[F[_]: Sync](val httpClient: Client[F]) {
 
     import ExtractorError._
     for {
-      mainScript <- scripts.lastOption
-        .fold(Sync[F].raiseError[Asset](NoScripts))(Sync[F].pure)
+      mainScript <- Sync[F].fromOption(scripts.lastOption, NoScripts)
       text <- fetch(branch.uri / "assets" / mainScript.filename.path)
-      buildNumber <- buildMetadataRegex
+      buildNumberOption = buildMetadataRegex
         .findFirstMatchIn(text)
         .map(_.group(1).toInt)
-        .fold(Sync[F].raiseError[Int](NoBuildNumber))(Sync[F].pure)
+      buildNumber <- Sync[F].fromOption(buildNumberOption, NoBuildNumber)
     } yield buildNumber
   }
 
