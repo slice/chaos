@@ -4,13 +4,12 @@ package scraper
 import discord._
 import errors._
 
-import cats.data.EitherT
 import cats.effect._
 import cats.implicits._
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
-import org.http4s.{MessageFailure, Request, Uri}
-import org.http4s.client.{Client, UnexpectedStatus}
+import org.http4s.{Request, Uri}
+import org.http4s.client.Client
 
 import scala.util.matching.{Regex, UnanchoredRegex}
 
@@ -26,39 +25,28 @@ class Scraper[F[_]: Sync](val httpClient: Client[F]) {
     Slf4jLogger.getLogger[F]
 
   /** Downloads the content of a Uri as a [[String]]. */
-  protected def fetch(uri: Uri): EitherT[F, DownloadError, String] = {
+  protected def fetch(uri: Uri): F[String] = {
     val request = Request[F](uri = uri, headers = Headers.headers)
-
-    for {
-      _ <- EitherT.right(Logger[F].debug(s"GETting $uri"))
-      text <- httpClient
-        .expect[String](request)
-        .attemptT
-        .leftMap[DownloadError] {
-          case UnexpectedStatus(status) => DownloadError.HTTPError(status)
-          case failure: MessageFailure  => DownloadError.DecodeError(failure)
-          case throwable                => DownloadError.NetworkError(throwable)
-        }
-    } yield text
+    Logger[F].debug(s"GETting $uri") *> httpClient.expect[String](request)
   }
 
   /** Downloads the main client HTML for a [[Branch]]. */
-  def fetchClient(branch: Branch): EitherT[F, DownloadError, String] =
+  def fetchClient(branch: Branch): F[String] =
     fetch(branch.uri / "channels" / "@me")
 
   /** Extracts assets (scripts and styles) from the HTML of `/channels/@me`. */
-  def extractAssets(pageHtml: String): Either[ExtractorError, Vector[Asset]] = {
+  def extractAssets(pageHtml: String): F[Vector[Asset]] = {
     val scriptTagRegex =
       raw"""<script src="/assets/([.a-f0-9]+)\.js" integrity="[^"]+"></script>""".r.unanchored
     val styleTagRegex =
       raw"""<link rel="stylesheet" href="/assets/([.a-f0-9]+)\.css" integrity="[^"]+">""".r.unanchored
 
-    def pull[A <: Asset](assetType: String => A,
-                         extractorError: ExtractorError,
-                         regex: Regex): Either[ExtractorError, Vector[A]] = {
+    def pull[A <: Asset](creator: String => A,
+                         notFoundException: Exception,
+                         regex: Regex): F[Vector[A]] = {
       val hashes = regex.findAllMatchIn(pageHtml).map(_.group(1))
-      if (hashes.isEmpty) Left(extractorError)
-      else Right(hashes.map(assetType).toVector)
+      if (hashes.isEmpty) Sync[F].raiseError(notFoundException)
+      else Sync[F].pure(hashes.map(creator).toVector)
     }
 
     val assetTypes: Map[String => Asset, (UnanchoredRegex, ExtractorError)] =
@@ -78,26 +66,20 @@ class Scraper[F[_]: Sync](val httpClient: Client[F]) {
   }
 
   /** Fetches and extracts the build number from a [[Seq]] of [[Asset]]s. */
-  def fetchBuildNumber(branch: Branch,
-                       assets: Seq[Asset]): EitherT[F, ScraperError, Int] = {
+  def fetchBuildNumber(branch: Branch, assets: Seq[Asset]): F[Int] = {
     val scripts = assets.filter(_.isInstanceOf[Asset.Script])
     val buildMetadataRegex =
       raw"Build Number: (\d+), Version Hash: ([a-f0-9]+)".r.unanchored
 
+    import ExtractorError._
     for {
-      mainScript <- EitherT
-        .fromEither[F](scripts.lastOption.toRight(ExtractorError.NoScripts))
-        .leftMap[ScraperError](ScraperError.Extractor)
+      mainScript <- scripts.lastOption
+        .fold(Sync[F].raiseError[Asset](NoScripts))(Sync[F].pure)
       text <- fetch(branch.uri / "assets" / mainScript.filename.path)
-        .leftMap[ScraperError](ScraperError.Download)
-      buildNumber <- EitherT
-        .fromEither[F](
-          buildMetadataRegex
-            .findFirstMatchIn(text)
-            .toRight(ExtractorError.NoBuildNumber)
-        )
-        .leftMap[ScraperError](ScraperError.Extractor)
+      buildNumber <- buildMetadataRegex
+        .findFirstMatchIn(text)
         .map(_.group(1).toInt)
+        .fold(Sync[F].raiseError[Int](NoBuildNumber))(Sync[F].pure)
     } yield buildNumber
   }
 
@@ -107,14 +89,10 @@ class Scraper[F[_]: Sync](val httpClient: Client[F]) {
     * This takes care of downloading the branch's HTML, finding [[discord.Asset assets]],
     * extracting the build number, etc.
     */
-  def scrape(branch: Branch): EitherT[F, ScraperError, Build] = {
+  def scrape(branch: Branch): F[Build] = {
     for {
       pageText <- fetchClient(branch)
-        .leftMap[ScraperError](ScraperError.Download)
-      assets <- EitherT.fromEither[F](
-        extractAssets(pageText)
-          .leftMap[ScraperError](ScraperError.Extractor)
-      )
+      assets <- extractAssets(pageText)
       buildNumber <- fetchBuildNumber(branch, assets)
     } yield Build(branch = branch, buildNumber = buildNumber, assets = assets)
   }

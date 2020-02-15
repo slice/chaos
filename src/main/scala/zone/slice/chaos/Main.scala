@@ -3,7 +3,6 @@ package zone.slice.chaos
 import discord._
 import publisher._
 import scraper._
-import scraper.errors._
 
 import cats.effect._
 import cats.implicits._
@@ -32,20 +31,19 @@ object Main extends IOApp {
   ): Stream[F, FiniteDuration] =
     Stream(0.seconds) ++ Stream.awakeEvery[F](rate)
 
-  def allBuildsStream[F[_]: ConcurrentEffect: Timer](
-    httpClient: Client[F],
-    rate: FiniteDuration
-  ): Stream[F, Stream[F, Either[ScraperError, Build]]] =
-    Stream.emits(Branch.all).map { branch =>
-      eagerAwakeEvery(rate)
-        .zipRight(branch.buildStream(new Scraper(httpClient)))
-        .evalTap {
-          case Left(error) =>
-            Logger[F].error(error)(show"Failed to scrape $branch")
-          case Right(build) =>
-            Logger[F].debug(show"Scraped $branch: $build")
-        }
-    }
+  /** A metered fs2 Stream of all builds from all branches. */
+  def allBuilds[F[_]: ConcurrentEffect: Timer](rate: FiniteDuration)(
+    implicit httpClient: Client[F]
+  ): Stream[F, (Branch, Either[Throwable, Build])] =
+    Stream
+      .emits(Branch.all)
+      .map { branch =>
+        eagerAwakeEvery(rate)
+          .as(branch)
+          .zipRight(branch.buildStream(new Scraper(httpClient)).attempt.repeat)
+          .map((branch, _))
+      }
+      .parJoin(Branch.all.size)
 
   /** Builds a list of [[Publisher]]s from a list of [[PublisherSetting]]s. */
   def buildPublishers[F[_]: Sync](
@@ -72,8 +70,8 @@ object Main extends IOApp {
     } yield ()
   }
 
-  /** Processes a single build, updating a [[BuildMap]] with the latest build. */
-  def processBuild[F[_]: ConcurrentEffect: Client](
+  /** Consumes a single build, returning an updated [[BuildMap]]. */
+  def consumeBuild[F[_]: ConcurrentEffect: Client](
     freshnessMap: BuildMap,
     build: Build,
     config: Config
@@ -87,29 +85,32 @@ object Main extends IOApp {
     else
       Sync[F].pure(freshnessMap)
 
-  def poller[F[_]: ConcurrentEffect: Timer](config: Config): F[Unit] =
-    Stream
-      .resource(BlazeClientBuilder[F](ExecutionContext.global).resource)
-      .flatMap { implicit httpClient =>
-        allBuildsStream(httpClient, rate = config.interval)
-          .parJoin(Branch.all.size)
-          .evalScan(Branch.all.map((_, none[Int])).toMap) {
-            (freshnessMap, result) =>
-              result match {
-                case Right(build) =>
-                  processBuild(freshnessMap, build, config = config)
-                case _ => Sync[F].pure(freshnessMap)
-              }
-          }
+  /** Polls and publishes builds from all branches forever. */
+  def poller[F[_]: ConcurrentEffect: Timer: Client](
+    config: Config
+  ): Stream[F, Unit] =
+    allBuilds(rate = config.interval)
+      .evalScan(Branch.all.map((_, none[Int])).toMap) {
+        case (freshnessMap, (branch, Left(error))) =>
+          Logger[F]
+            .error(error)(show"Failed to scrape $branch")
+            .as(freshnessMap)
+        case (freshnessMap, (_, Right(build))) =>
+          consumeBuild(freshnessMap, build, config = config)
       }
-      .compile
       .drain
 
+  /** Starts the poller from a [[Config]]. */
   def startPoller[F[_]: ConcurrentEffect: Timer](config: Config): F[ExitCode] =
-    for {
-      _ <- Logger[F].info(show"Starting poller (interval: ${config.interval})")
-      _ <- poller[F](config)
-    } yield ExitCode.Success
+    Logger[F].info(show"Starting poller (interval: ${config.interval})") *>
+      Stream
+        .resource(BlazeClientBuilder[F](ExecutionContext.global).resource)
+        .flatMap { implicit httpClient =>
+          poller(config)
+        }
+        .compile
+        .drain
+        .as(ExitCode.Success)
 
   def program[F[_]: ConcurrentEffect: Timer]: F[ExitCode] =
     parser

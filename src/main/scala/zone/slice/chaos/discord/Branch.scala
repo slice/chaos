@@ -2,7 +2,6 @@ package zone.slice.chaos
 package discord
 
 import scraper._
-import errors.ScraperError
 
 import fs2._
 import cats.Show
@@ -25,10 +24,8 @@ sealed trait Branch {
     }
 
   /** The fs2 Stream of builds for this branch. */
-  def buildStream[F[_]: Concurrent](
-    scraper: Scraper[F]
-  ): Stream[F, Either[ScraperError, Build]] =
-    Stream.repeatEval(scraper.scrape(this).value)
+  def buildStream[F[_]: Sync](scraper: Scraper[F]): Stream[F, Build] =
+    Stream.repeatEval(scraper.scrape(this))
 
   /** The "color" of this branch. */
   def color: Int = this match {
