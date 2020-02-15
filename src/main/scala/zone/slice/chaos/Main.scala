@@ -114,15 +114,22 @@ object Main extends IOApp {
         .compile
         .drain
 
+  def eput[F[_]: Sync](message: String): F[Unit] =
+    Sync[F].delay(Console.err.println(message))
+
   def program[F[_]: ConcurrentEffect: Timer]: F[ExitCode] =
     parser
       .decodeF[F, Config]()
       .attemptT
       .foldF(
-        error =>
-          Sync[F]
-            .delay(Console.err.println(s"Failed to load config file: $error"))
-            .as(ExitCode.Error),
+        {
+          case decodingFailure: DecodingFailure =>
+            eput(show"Failed to decode config file: $decodingFailure")
+              .as(ExitCode.Error)
+          case error =>
+            eput(s"Failed to load config file: $error")
+              .as(ExitCode.Error)
+        },
         startPoller(_).as(ExitCode.Success)
       )
 
