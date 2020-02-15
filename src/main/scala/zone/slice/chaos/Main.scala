@@ -1,5 +1,7 @@
 package zone.slice.chaos
 
+import java.util.concurrent.Executors
+
 import discord._
 import publisher._
 import scraper._
@@ -22,6 +24,9 @@ object Main extends IOApp {
   // ~_~
   protected implicit def unsafeLogger[F[_]: Sync]: Logger[F] =
     Slf4jLogger.getLogger[F]
+
+  protected val executionContext: ExecutionContext =
+    ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
 
   /** Similar to `Stream.awakeEvery`, but doesn't do a first sleep. */
   def eagerAwakeEvery[F[_]: ConcurrentEffect: Timer](
@@ -102,7 +107,7 @@ object Main extends IOApp {
   def startPoller[F[_]: ConcurrentEffect: Timer](config: Config): F[Unit] =
     Logger[F].info(show"Starting poller (interval: ${config.interval})") *>
       Stream
-        .resource(BlazeClientBuilder[F](ExecutionContext.global).resource)
+        .resource(BlazeClientBuilder[F](executionContext).resource)
         .flatMap { implicit httpClient =>
           poller(config)
         }
