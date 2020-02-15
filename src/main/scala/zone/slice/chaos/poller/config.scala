@@ -1,4 +1,5 @@
 package zone.slice.chaos
+package poller
 
 import discord.Branch
 
@@ -35,4 +36,5 @@ final case class DiscordPublisherSetting(id: BigInt,
                                          branches: Set[Branch] = Branch.all)
     extends PublisherSetting
 
+/** A configuration for a [[Poller]]. */
 case class Config(interval: FiniteDuration, publishers: List[PublisherSetting])
