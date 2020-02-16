@@ -37,9 +37,9 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
   /** Extracts assets (scripts and styles) from the HTML of `/channels/@me`. */
   def extractAssets(pageHtml: String): F[Vector[Asset]] = {
     val scriptTagRegex =
-      raw"""<script src="/assets/([.a-f0-9]+)\.js" integrity="[^"]+"></script>""".r.unanchored
+      """<script src="/assets/([.a-f0-9]+)\.js" integrity="[^"]+"></script>""".r.unanchored
     val styleTagRegex =
-      raw"""<link rel="stylesheet" href="/assets/([.a-f0-9]+)\.css" integrity="[^"]+">""".r.unanchored
+      """<link rel="stylesheet" href="/assets/([.a-f0-9]+)\.css" integrity="[^"]+">""".r.unanchored
 
     def pull[A <: Asset](creator: String => A,
                          notFoundException: Exception,
@@ -69,7 +69,7 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
   def fetchBuildNumber(branch: Branch, assets: Seq[Asset]): F[Int] = {
     val scripts = assets.filter(_.isInstanceOf[Asset.Script])
     val buildMetadataRegex =
-      raw"Build Number: (\d+), Version Hash: ([a-f0-9]+)".r.unanchored
+      """Build Number: (\d+), Version Hash: ([a-f0-9]+)""".r.unanchored
 
     import ExtractorError._
     for {
