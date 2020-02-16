@@ -56,7 +56,7 @@ class Poller[F[_]: Timer] private (config: Config)(
 
   /** Publishes a [[Build]] to a list of [[PublisherSetting]]s. */
   def publish(build: Build, publisherSettings: List[PublisherSetting])(
-    implicit client: Client[F]
+    implicit httpClient: Client[F]
   ): F[Unit] = {
     publisherSettings
       .filter(_.branches.contains(build.branch))
@@ -75,7 +75,7 @@ class Poller[F[_]: Timer] private (config: Config)(
     freshnessMap: BuildMap.Type,
     build: Build,
     config: Config
-  )(implicit client: Client[F]): F[BuildMap.Type] =
+  )(implicit httpClient: Client[F]): F[BuildMap.Type] =
     if (freshnessMap
           .getOrElse(build.branch, none[Int])
           .forall(build.buildNumber > _))
@@ -86,7 +86,7 @@ class Poller[F[_]: Timer] private (config: Config)(
       F.pure(freshnessMap)
 
   /** Polls and publishes builds from all branches forever. */
-  def poller(implicit client: Client[F]): Stream[F, Unit] = {
+  def poller(implicit httpClient: Client[F]): Stream[F, Unit] = {
     // Compute the branches that we have to scrape from. If all publishers are
     // configured to only scrape from the Canary branch, then we can simply only
     // scrape from that branch.
