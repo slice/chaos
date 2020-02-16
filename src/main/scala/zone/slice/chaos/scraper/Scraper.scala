@@ -19,7 +19,7 @@ import scala.util.matching.{Regex, UnanchoredRegex}
   *
   * Effects are executed within `F`.
   */
-class Scraper[F[_]: Sync](val httpClient: Client[F]) {
+class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
 
   protected implicit def unsafeLogger: Logger[F] =
     Slf4jLogger.getLogger[F]
@@ -45,8 +45,8 @@ class Scraper[F[_]: Sync](val httpClient: Client[F]) {
                          notFoundException: Exception,
                          regex: Regex): F[Vector[A]] = {
       val hashes = regex.findAllMatchIn(pageHtml).map(_.group(1))
-      if (hashes.isEmpty) Sync[F].raiseError(notFoundException)
-      else Sync[F].pure(hashes.map(creator).toVector)
+      if (hashes.isEmpty) F.raiseError(notFoundException)
+      else F.pure(hashes.map(creator).toVector)
     }
 
     val assetTypes: Map[String => Asset, (UnanchoredRegex, ExtractorError)] =
@@ -73,12 +73,12 @@ class Scraper[F[_]: Sync](val httpClient: Client[F]) {
 
     import ExtractorError._
     for {
-      mainScript <- Sync[F].fromOption(scripts.lastOption, NoScripts)
-      text <- fetch(branch.uri / "assets" / mainScript.filename.path)
+      mainScript <- F.fromOption(scripts.lastOption, NoScripts)
+      text <- fetch(mainScript.uri)
       buildNumberOption = buildMetadataRegex
         .findFirstMatchIn(text)
         .map(_.group(1).toInt)
-      buildNumber <- Sync[F].fromOption(buildNumberOption, NoBuildNumber)
+      buildNumber <- F.fromOption(buildNumberOption, NoBuildNumber)
     } yield buildNumber
   }
 
