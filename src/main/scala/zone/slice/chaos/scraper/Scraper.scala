@@ -66,7 +66,7 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
   }
 
   /** Fetches and extracts the build number from a [[Seq]] of [[Asset]]s. */
-  def fetchBuildNumber(branch: Branch, assets: Seq[Asset]): F[Int] = {
+  def fetchBuildNumber(assets: Seq[Asset]): F[Int] = {
     val scripts = assets.filter(_.isInstanceOf[Asset.Script])
     val buildMetadataRegex =
       """Build Number: (\d+), Version Hash: ([a-f0-9]+)""".r.unanchored
@@ -92,7 +92,7 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
     for {
       pageText <- fetchClient(branch)
       assets <- extractAssets(pageText)
-      buildNumber <- fetchBuildNumber(branch, assets)
+      buildNumber <- fetchBuildNumber(assets)
     } yield Build(branch = branch, buildNumber = buildNumber, assets = assets)
   }
 }
