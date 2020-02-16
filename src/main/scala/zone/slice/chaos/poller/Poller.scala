@@ -24,11 +24,11 @@ class Poller[F[_]: Timer] private (config: Config)(
   protected val executionContext: ExecutionContext =
     ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
 
-  /** Equivalent to `Stream.awakeEvery`, but doesn't do a first sleep. */
-  protected def eagerAwakeEvery(
+  /** Equivalent to `Stream.awakeDelay`, but doesn't do a first sleep. */
+  protected def eagerAwakeDelay(
     rate: FiniteDuration
   ): Stream[F, FiniteDuration] =
-    Stream(0.seconds) ++ Stream.awakeEvery[F](rate)
+    Stream(0.seconds) ++ Stream.awakeDelay[F](rate)
 
   /** A metered fs2 Stream of all builds from some branches. */
   def scrapeStream(branches: Set[Branch], rate: FiniteDuration)(
@@ -37,7 +37,7 @@ class Poller[F[_]: Timer] private (config: Config)(
     Stream
       .emits(branches.toList)
       .map { branch =>
-        eagerAwakeEvery(rate)
+        eagerAwakeDelay(rate)
           .as(branch)
           .zipRight(branch.buildStream(new Scraper(httpClient)).attempt.repeat)
           .map((branch, _))
