@@ -11,7 +11,7 @@ import scala.concurrent.duration.FiniteDuration
 
 sealed trait PublisherSetting {
 
-  /** A [[Set]] of branches to only builds publish from. */
+  /** A set of branches to only builds publish from. */
   def branches: Set[Branch]
 }
 

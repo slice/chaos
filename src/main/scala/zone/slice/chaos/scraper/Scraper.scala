@@ -24,13 +24,13 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
   protected implicit def unsafeLogger: Logger[F] =
     Slf4jLogger.getLogger[F]
 
-  /** Downloads the content of a Uri as a [[String]]. */
+  /** Downloads the content of a Uri as a string. */
   protected def fetch(uri: Uri): F[String] = {
     val request = Request[F](uri = uri, headers = Headers.headers)
     Logger[F].debug(s"GETting $uri") *> httpClient.expect[String](request)
   }
 
-  /** Downloads the main client HTML for a [[Branch]]. */
+  /** Downloads the main client HTML for a [[discord.Branch]]. */
   def fetchClient(branch: Branch): F[String] =
     fetch(branch.uri / "channels" / "@me")
 
@@ -57,7 +57,7 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
     }
   }
 
-  /** Fetches and extracts the build number from an [[AssetBundle]]. */
+  /** Fetches and extracts the build number from an [[discord.AssetBundle]]. */
   def fetchBuildNumber(assets: AssetBundle): F[Int] = {
     val buildMetadataRegex =
       """Build Number: (\d+), Version Hash: ([a-f0-9]+)""".r.unanchored

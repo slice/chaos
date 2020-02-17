@@ -44,7 +44,7 @@ class Poller[F[_]: Timer] private (config: Config)(
       }
       .parJoin(Branch.all.size)
 
-  /** Builds a [[Publisher]] from a [[PublisherSetting]]. */
+  /** Builds a [[publisher.Publisher]] from a [[PublisherSetting]]. */
   protected def buildPublisher(
     setting: PublisherSetting
   )(implicit httpClient: Client[F]): Publisher[F] = setting match {
@@ -54,7 +54,7 @@ class Poller[F[_]: Timer] private (config: Config)(
       new StdoutPublisher[F](format)
   }
 
-  /** Publishes a [[Build]] to a list of [[PublisherSetting]]s. */
+  /** Publishes a [[discord.Build]] to a list of [[PublisherSetting]]s. */
   def publish(build: Build, publisherSettings: List[PublisherSetting])(
     implicit httpClient: Client[F]
   ): F[Unit] = {
