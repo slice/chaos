@@ -54,3 +54,5 @@ lazy val root = (project in file("."))
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, homepage),
     buildInfoPackage := "zone.slice.chaos",
   )
+
+javaOptions in reStart += "-Dconfig.file=./application.conf"
