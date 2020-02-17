@@ -22,19 +22,35 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
   protected implicit def unsafeLogger: Logger[F] =
     Slf4jLogger.getLogger[F]
 
-  protected def assetList(assets: Vector[Asset]): String =
-    assets.map(asset => s"[`${asset.filename}`](${asset.uri})").mkString("\n")
+  protected def assetList(assets: Vector[Asset]): Vector[String] =
+    assets.map(asset => s"[`${asset.filename}`](${asset.uri})")
+
+  protected def labelScriptList(scripts: Vector[String]): Vector[String] = {
+    val assumedNames = List("chunk loader", "classes", "vendor", "entrypoint")
+
+    if (scripts.size == assumedNames.size) {
+      // Only attempt to label each script if we get the expected amount of
+      // scripts.
+      scripts.zip(assumedNames).map {
+        case (link, name) => s"$link ($name)"
+      }
+    } else scripts
+  }
 
   protected def embedForBuild(build: Build): Json = {
     val title = show"${build.branch} ${build.buildNumber}"
+
+    val scriptList =
+      labelScriptList(assetList(build.assets.scripts)).mkString("\n")
+    val stylesheetList = assetList(build.assets.stylesheets).mkString("\n")
 
     val embed = json"""
       {
         "title": $title,
         "color": ${build.branch.color},
         "fields": [
-          {"name": "Scripts", "value": ${assetList(build.assets.scripts)}},
-          {"name": "Stylesheets", "value": ${assetList(build.assets.stylesheets)}}
+          {"name": "Scripts", "value": $scriptList},
+          {"name": "Stylesheets", "value": $stylesheetList}
         ]
       }
     """
