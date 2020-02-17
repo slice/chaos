@@ -27,7 +27,7 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
   /** Downloads the content of a Uri as a string. */
   protected def fetch(uri: Uri): F[String] = {
     val request = Request[F](uri = uri, headers = Headers.headers)
-    Logger[F].debug(s"GETting $uri") *> httpClient.expect[String](request)
+    Logger[F].debug(s"GET $uri") *> httpClient.expect[String](request)
   }
 
   /** Downloads the main client HTML for a [[discord.Branch]]. */
