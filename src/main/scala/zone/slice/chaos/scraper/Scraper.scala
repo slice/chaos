@@ -11,7 +11,7 @@ import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import org.http4s.{Request, Uri}
 import org.http4s.client.Client
 
-import scala.util.matching.{Regex, UnanchoredRegex}
+import scala.util.matching.Regex
 
 /**
   * Downloads Discord client bundles and extracts metdata from them (in the form
@@ -35,7 +35,7 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
     fetch(branch.uri / "channels" / "@me")
 
   /** Extracts assets (scripts and styles) from the HTML of `/channels/@me`. */
-  def extractAssets(pageHtml: String): F[Vector[Asset]] = {
+  def extractAssets(pageHtml: String): F[AssetBundle] = {
     val scriptTagRegex =
       """<script src="/assets/([.a-f0-9]+)\.js" integrity="[^"]+"></script>""".r.unanchored
     val styleTagRegex =
@@ -49,31 +49,22 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
       else F.pure(hashes.map(creator).toVector)
     }
 
-    val assetTypes: Map[String => Asset, (UnanchoredRegex, ExtractorError)] =
-      Map(
-        Asset.Script -> ((scriptTagRegex, ExtractorError.NoScripts)),
-        Asset.Stylesheet -> ((styleTagRegex, ExtractorError.NoStylesheets))
-      )
-
-    assetTypes
-      .map {
-        case (assetType, (regex, extractorError)) =>
-          pull(assetType, extractorError, regex)
-      }
-      .toVector
-      .sequence
-      .map(_.flatten)
+    (
+      pull(Asset.Script, ExtractorError.NoScripts, scriptTagRegex),
+      pull(Asset.Stylesheet, ExtractorError.NoStylesheets, styleTagRegex)
+    ).tupled.map {
+      case (scripts, stylesheets) => AssetBundle(scripts, stylesheets)
+    }
   }
 
-  /** Fetches and extracts the build number from a [[Seq]] of [[Asset]]s. */
-  def fetchBuildNumber(assets: Seq[Asset]): F[Int] = {
-    val scripts = assets.filter(_.isInstanceOf[Asset.Script])
+  /** Fetches and extracts the build number from an [[AssetBundle]]. */
+  def fetchBuildNumber(assets: AssetBundle): F[Int] = {
     val buildMetadataRegex =
       """Build Number: (\d+), Version Hash: ([a-f0-9]+)""".r.unanchored
 
     import ExtractorError._
     for {
-      mainScript <- F.fromOption(scripts.lastOption, NoScripts)
+      mainScript <- F.fromOption(assets.scripts.lastOption, NoScripts)
       text <- fetch(mainScript.uri)
       buildNumberOption = buildMetadataRegex
         .findFirstMatchIn(text)
@@ -83,16 +74,17 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
   }
 
   /**
-    * Scrapes a [[discord.Branch Discord branch]] for [[discord.Build build information]].
+    * Scrapes a [[discord.Branch]] for [[discord.Build build information]].
     *
-    * This takes care of downloading the branch's HTML, finding [[discord.Asset assets]],
-    * extracting the build number, etc.
+    * This takes care of downloading the branch's HTML, finding
+    * [[discord.Asset]]s, extracting the build number, etc.
     */
   def scrape(branch: Branch): F[Build] = {
     for {
       pageText <- fetchClient(branch)
-      assets <- extractAssets(pageText)
-      buildNumber <- fetchBuildNumber(assets)
-    } yield Build(branch = branch, buildNumber = buildNumber, assets = assets)
+      assetBundle <- extractAssets(pageText)
+      buildNumber <- fetchBuildNumber(assetBundle)
+    } yield
+      Build(branch = branch, buildNumber = buildNumber, assets = assetBundle)
   }
 }

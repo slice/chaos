@@ -1,7 +1,7 @@
 package zone.slice.chaos
 package publisher
 
-import discord.{Build, Webhook}
+import discord.{Build, Webhook, Asset}
 import scraper.Headers
 
 import cats.implicits._
@@ -22,18 +22,19 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
   protected implicit def unsafeLogger: Logger[F] =
     Slf4jLogger.getLogger[F]
 
+  protected def assetList(assets: Vector[Asset]): String =
+    assets.map(asset => s"[`${asset.filename}`](${asset.uri})").mkString("\n")
+
   protected def embedForBuild(build: Build): Json = {
     val title = show"${build.branch} ${build.buildNumber}"
-    val assetList = build.assets
-      .map(asset => s"[`${asset.filename}`](${asset.uri})")
-      .mkString("\n")
 
     val embed = json"""
       {
         "title": $title,
         "color": ${build.branch.color},
         "fields": [
-          {"name": "Assets", "value": $assetList}
+          {"name": "Scripts", "value": ${assetList(build.assets.scripts)}},
+          {"name": "Stylesheets", "value": ${assetList(build.assets.stylesheets)}}
         ]
       }
     """
