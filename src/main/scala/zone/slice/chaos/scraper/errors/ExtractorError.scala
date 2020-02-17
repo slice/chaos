@@ -23,9 +23,10 @@ object ExtractorError {
     override val getMessage: String = "No stylesheet tags were found"
   }
 
-  /** Thrown when no build number could be found. */
-  case object NoBuildNumber extends ExtractorError with NoStackTrace {
-    override val getMessage: String = "A build number couldn't be found"
+  /** Thrown when no build number or version hash could be found. */
+  case object NoBuildInfo extends ExtractorError with NoStackTrace {
+    override val getMessage: String =
+      "A build number or version hash couldn't be found"
   }
 
   implicit val showExtractorError: Show[ExtractorError] =

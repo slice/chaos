@@ -9,7 +9,12 @@ import cats.implicits._
   * Contains build metadata such as the "build number" and all of the
   * surface-level assets of the build.
   */
-final case class Build(branch: Branch, buildNumber: Int, assets: AssetBundle)
+final case class Build(
+    branch: Branch,
+    hash: String,
+    buildNumber: Int,
+    assets: AssetBundle,
+)
 
 object Build {
   implicit val showBuild: Show[Build] = (build: Build) =>

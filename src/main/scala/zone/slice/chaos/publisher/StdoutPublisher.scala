@@ -11,6 +11,7 @@ class StdoutPublisher[F[_]: Sync](format: String) extends Publisher[F] {
     Map(
       "branch"       -> build.branch.toString,
       "build_number" -> build.buildNumber.toString,
+      "hash"         -> build.hash,
       "asset_filename_list" -> build.assets.all
         .map(_.filename.toString)
         .mkString(", "),

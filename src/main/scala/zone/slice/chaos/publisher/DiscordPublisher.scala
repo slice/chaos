@@ -47,6 +47,7 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
   protected def embedForBuild(build: Build): F[Json] = {
     val title = show"${build.branch} ${build.buildNumber}"
 
+    val description = s"Hash: `${build.hash}`"
     val scriptList =
       labelScriptList(assetList(build.assets.scripts)).mkString("\n")
     val stylesheetList = assetList(build.assets.stylesheets).mkString("\n")
@@ -56,6 +57,7 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
       {
         "title": $title,
         "color": ${build.branch.color},
+        "description": $description,
         "fields": [
           {"name": "Scripts", "value": $scriptList},
           {"name": "Stylesheets", "value": $stylesheetList}

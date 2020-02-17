@@ -145,5 +145,6 @@ Prints new builds to `stdout` through a format string. Available variables:
 | Variable               | Value                                                  |
 | ---------------------- | ------------------------------------------------------ |
 | `$branch`              | The name of the branch that the build is from.         |
-| `$build_number`        | The build number of the build.                         |
+| `$build_number`        | The build number of the build from Discord.            |
+| `$hash`                | The hash ("Version Hash") of the build from Discord.   |
 | `$asset_filename_list` | A list of all build asset filenames, separated by `,`. |

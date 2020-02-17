@@ -59,8 +59,9 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
     }
   }
 
-  /** Fetches and extracts the build number from an [[discord.AssetBundle]]. */
-  def fetchBuildNumber(assets: AssetBundle): F[Int] = {
+  /** Fetches and extracts the build number and build hash from an
+    * [[discord.AssetBundle]]. */
+  def fetchBuildInfo(assets: AssetBundle): F[(Int, String)] = {
     val buildMetadataRegex =
       """Build Number: (\d+), Version Hash: ([a-f0-9]+)""".r.unanchored
 
@@ -68,11 +69,11 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
     for {
       mainScript <- F.fromOption(assets.scripts.lastOption, NoScripts)
       text       <- fetch(mainScript.uri)
-      buildNumberOption = buildMetadataRegex
+      maybeInfo = buildMetadataRegex
         .findFirstMatchIn(text)
-        .map(_.group(1).toInt)
-      buildNumber <- F.fromOption(buildNumberOption, NoBuildNumber)
-    } yield buildNumber
+        .map(match_ => (match_.group(1).toInt, match_.group(2)))
+      info <- F.fromOption(maybeInfo, NoBuildInfo)
+    } yield info
   }
 
   /**
@@ -85,10 +86,11 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
     for {
       pageText    <- fetchClient(branch)
       assetBundle <- extractAssets(pageText)
-      buildNumber <- fetchBuildNumber(assetBundle)
+      info        <- fetchBuildInfo(assetBundle)
     } yield Build(
       branch = branch,
-      buildNumber = buildNumber,
+      hash = info._2,
+      buildNumber = info._1,
       assets = assetBundle,
     )
   }
