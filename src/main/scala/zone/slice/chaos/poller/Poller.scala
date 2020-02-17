@@ -18,21 +18,21 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 class Poller[F[_]: Timer] private (config: Config)(
-  implicit F: ConcurrentEffect[F],
-  L: Logger[F]
+    implicit F: ConcurrentEffect[F],
+    L: Logger[F],
 ) {
   protected val executionContext: ExecutionContext =
     ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
 
   /** Equivalent to `Stream.awakeDelay`, but doesn't do a first sleep. */
   protected def eagerAwakeDelay(
-    rate: FiniteDuration
+      rate: FiniteDuration,
   ): Stream[F, FiniteDuration] =
     Stream(0.seconds) ++ Stream.awakeDelay[F](rate)
 
   /** A metered fs2 Stream of all builds from some branches. */
   def scrapeStream(branches: Set[Branch], rate: FiniteDuration)(
-    implicit httpClient: Client[F]
+      implicit httpClient: Client[F],
   ): Stream[F, (Branch, Either[Throwable, Build])] =
     Stream
       .emits(branches.toList)
@@ -46,7 +46,7 @@ class Poller[F[_]: Timer] private (config: Config)(
 
   /** Builds a [[publisher.Publisher]] from a [[PublisherSetting]]. */
   protected def buildPublisher(
-    setting: PublisherSetting
+      setting: PublisherSetting,
   )(implicit httpClient: Client[F]): Publisher[F] = setting match {
     case DiscordPublisherSetting(id, token, _) =>
       new DiscordPublisher[F](Webhook(id, token), httpClient)
@@ -56,15 +56,14 @@ class Poller[F[_]: Timer] private (config: Config)(
 
   /** Publishes a [[discord.Build]] to a list of [[PublisherSetting]]s. */
   def publish(build: Build, publisherSettings: List[PublisherSetting])(
-    implicit httpClient: Client[F]
+      implicit httpClient: Client[F],
   ): F[Unit] = {
     publisherSettings
       .filter(_.branches.contains(build.branch))
       .map(buildPublisher)
-      .map(
-        publisher =>
-          L.info(s"Publishing fresh ${build.branch} build to $publisher")
-            *> publisher.publish(build)
+      .map(publisher =>
+        L.info(s"Publishing fresh ${build.branch} build to $publisher")
+          *> publisher.publish(build),
       )
       .sequence
       .void
@@ -72,9 +71,9 @@ class Poller[F[_]: Timer] private (config: Config)(
 
   /** Consumes a single build, returning an updated [[BuildMap]]. */
   protected def consumeBuild(
-    freshnessMap: BuildMap.Type,
-    build: Build,
-    config: Config
+      freshnessMap: BuildMap.Type,
+      build: Build,
+      config: Config,
   )(implicit httpClient: Client[F]): F[BuildMap.Type] =
     if (freshnessMap
           .getOrElse(build.branch, none[Int])

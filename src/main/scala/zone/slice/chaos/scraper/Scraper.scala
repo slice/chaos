@@ -41,9 +41,11 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
     val styleTagRegex =
       """<link rel="stylesheet" href="/assets/([.a-f0-9]+)\.css" integrity="[^"]+">""".r.unanchored
 
-    def pull[A <: Asset](creator: String => A,
-                         notFoundException: Exception,
-                         regex: Regex): F[Vector[A]] = {
+    def pull[A <: Asset](
+        creator: String => A,
+        notFoundException: Exception,
+        regex: Regex,
+    ): F[Vector[A]] = {
       val hashes = regex.findAllMatchIn(pageHtml).map(_.group(1))
       if (hashes.isEmpty) F.raiseError(notFoundException)
       else F.pure(hashes.map(creator).toVector)
@@ -51,7 +53,7 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
 
     (
       pull(Asset.Script, ExtractorError.NoScripts, scriptTagRegex),
-      pull(Asset.Stylesheet, ExtractorError.NoStylesheets, styleTagRegex)
+      pull(Asset.Stylesheet, ExtractorError.NoStylesheets, styleTagRegex),
     ).tupled.map {
       case (scripts, stylesheets) => AssetBundle(scripts, stylesheets)
     }
@@ -65,7 +67,7 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
     import ExtractorError._
     for {
       mainScript <- F.fromOption(assets.scripts.lastOption, NoScripts)
-      text <- fetch(mainScript.uri)
+      text       <- fetch(mainScript.uri)
       buildNumberOption = buildMetadataRegex
         .findFirstMatchIn(text)
         .map(_.group(1).toInt)
@@ -81,10 +83,13 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
     */
   def scrape(branch: Branch): F[Build] = {
     for {
-      pageText <- fetchClient(branch)
+      pageText    <- fetchClient(branch)
       assetBundle <- extractAssets(pageText)
       buildNumber <- fetchBuildNumber(assetBundle)
-    } yield
-      Build(branch = branch, buildNumber = buildNumber, assets = assetBundle)
+    } yield Build(
+      branch = branch,
+      buildNumber = buildNumber,
+      assets = assetBundle,
+    )
   }
 }

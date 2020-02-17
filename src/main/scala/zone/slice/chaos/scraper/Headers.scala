@@ -9,7 +9,7 @@ object Headers {
     val mainProduct = AgentProduct(BuildInfo.name, Some(BuildInfo.version))
     val otherTokens = List(
       AgentProduct("scala", Some(BuildInfo.scalaVersion)),
-      AgentProduct("http4s", Some(org.http4s.BuildInfo.version))
+      AgentProduct("http4s", Some(org.http4s.BuildInfo.version)),
     )
 
     `User-Agent`(mainProduct, BuildInfo.homepage match {

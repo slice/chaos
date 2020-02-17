@@ -28,13 +28,15 @@ object PublisherSetting {
     }
 }
 
-final case class StdoutPublisherSetting(format: String,
-                                        branches: Set[Branch] = Branch.all)
-    extends PublisherSetting
-final case class DiscordPublisherSetting(id: BigInt,
-                                         token: String,
-                                         branches: Set[Branch] = Branch.all)
-    extends PublisherSetting
+final case class StdoutPublisherSetting(
+    format: String,
+    branches: Set[Branch] = Branch.all,
+) extends PublisherSetting
+final case class DiscordPublisherSetting(
+    id: BigInt,
+    token: String,
+    branches: Set[Branch] = Branch.all,
+) extends PublisherSetting
 
 /** A configuration for a [[Poller]]. */
 case class Config(interval: FiniteDuration, publishers: List[PublisherSetting])

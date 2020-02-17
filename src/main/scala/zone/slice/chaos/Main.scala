@@ -36,7 +36,7 @@ object Main extends IOApp {
       .attemptT
       .foldF(
         handleConfigError(_).as(ExitCode.Error),
-        Poller(_).as(ExitCode.Success)
+        Poller(_).as(ExitCode.Success),
       )
 
   override def run(args: List[String]): IO[ExitCode] =

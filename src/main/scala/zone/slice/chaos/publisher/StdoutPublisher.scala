@@ -9,12 +9,12 @@ class StdoutPublisher[F[_]: Sync](format: String) extends Publisher[F] {
 
   val replacers: Build => Map[String, String] = (build: Build) =>
     Map(
-      "branch" -> build.branch.toString,
+      "branch"       -> build.branch.toString,
       "build_number" -> build.buildNumber.toString,
       "asset_filename_list" -> build.assets.all
         .map(_.filename.toString)
-        .mkString(", ")
-  )
+        .mkString(", "),
+    )
 
   override def publish(build: Build): F[Unit] = {
     val message = replacers(build).foldLeft(format) { (format, mapping) =>
