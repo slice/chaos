@@ -15,6 +15,8 @@ import org.http4s.client.dsl.Http4sClientDsl
 import io.circe._
 import io.circe.literal._
 
+import java.time.Instant
+
 class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
     extends Publisher[F]
     with Http4sClientDsl[F] {
@@ -24,6 +26,11 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
 
   protected def assetList(assets: Vector[Asset]): Vector[String] =
     assets.map(asset => s"[`${asset.filename}`](${asset.uri})")
+
+  private def currentTimestamp: F[String] =
+    Sync[F].delay {
+      Instant.now().toString
+    }
 
   protected def labelScriptList(scripts: Vector[String]): Vector[String] = {
     val assumedNames = List("chunk loader", "classes", "vendor", "entrypoint")
@@ -37,38 +44,42 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
     } else scripts
   }
 
-  protected def embedForBuild(build: Build): Json = {
+  protected def embedForBuild(build: Build): F[Json] = {
     val title = show"${build.branch} ${build.buildNumber}"
 
     val scriptList =
       labelScriptList(assetList(build.assets.scripts)).mkString("\n")
     val stylesheetList = assetList(build.assets.stylesheets).mkString("\n")
 
-    val embed = json"""
+    currentTimestamp map { timestamp =>
+      json"""
       {
         "title": $title,
         "color": ${build.branch.color},
         "fields": [
           {"name": "Scripts", "value": $scriptList},
           {"name": "Stylesheets", "value": $stylesheetList}
-        ]
+        ],
+        "timestamp": $timestamp
       }
-    """
-
-    json"""
+      """
+    } map { embed =>
+      json"""
       {
         "username": "chaos",
         "embeds": [$embed]
       }
-    """
+      """
+    }
   }
 
   override def publish(build: Build): F[Unit] = {
     val message =
       show"Publishing ${build.branch} ${build.buildNumber} to Discord webhook ${webhook.id}"
     for {
-      _ <- Logger[F].info(message)
-      request = POST(embedForBuild(build), webhook.uri, Headers.userAgentHeader)
+      _     <- Logger[F].info(message)
+      embed <- embedForBuild(build)
+      request = POST(embed, webhook.uri, Headers.userAgentHeader)
       _ <- httpClient.expect[Unit](request)
     } yield ()
   }
