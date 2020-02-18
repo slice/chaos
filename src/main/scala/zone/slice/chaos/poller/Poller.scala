@@ -17,7 +17,7 @@ import org.http4s.client.blaze.BlazeClientBuilder
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
-class Poller[F[_]: Timer] private (config: Config)(
+class Poller[F[_]: Timer] private[chaos] (config: Config)(
     implicit F: ConcurrentEffect[F],
     L: Logger[F],
 ) {
@@ -70,7 +70,7 @@ class Poller[F[_]: Timer] private (config: Config)(
   }
 
   /** Consumes a single build, returning an updated [[BuildMap]]. */
-  protected def consumeBuild(
+  def consumeBuild(
       freshnessMap: BuildMap.Type,
       build: Build,
       config: Config,
