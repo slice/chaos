@@ -73,7 +73,6 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
   def consumeBuild(
       freshnessMap: BuildMap.Type,
       build: Build,
-      config: Config,
   )(implicit httpClient: Client[F]): F[BuildMap.Type] = {
     val currentBuildNumber = build.buildNumber
     val lastBuildNumber    = freshnessMap.getOrElse(build.branch, none[Int])
@@ -107,7 +106,7 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
             L.error(error)(show"Failed to scrape $branch")
               .as(freshnessMap)
           case (freshnessMap, (_, Right(build))) =>
-            consumeBuild(freshnessMap, build, config = config)
+            consumeBuild(freshnessMap, build)
         }
         .drain
   }
