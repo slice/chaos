@@ -18,4 +18,7 @@ case class AssetBundle(
 object AssetBundle {
   implicit val showAssetBundle: Show[AssetBundle] =
     Show.fromToString[AssetBundle]
+
+  /** An empty asset bundle. */
+  def empty: AssetBundle = AssetBundle(Vector.empty, Vector.empty)
 }
