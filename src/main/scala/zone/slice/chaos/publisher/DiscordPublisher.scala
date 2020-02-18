@@ -1,7 +1,7 @@
 package zone.slice.chaos
 package publisher
 
-import discord.{Build, Webhook, Asset}
+import discord._
 import scraper.Headers
 
 import cats.implicits._
@@ -44,13 +44,23 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
     } else scripts
   }
 
-  protected def embedForBuild(build: Build): F[Json] = {
-    val title = show"${build.branch} ${build.buildNumber}"
+  protected def embedForDeploy(deploy: Deploy): F[Json] = {
+    val build = deploy.build
 
+    val title =
+      if (deploy.isRevert)
+        show"\u21a9\ufe0f ${build.branch} reverted to ${build.buildNumber}"
+      else show"${build.branch} ${build.buildNumber}"
     val description = s"Hash: `${build.hash}`"
+
     val scriptList =
       labelScriptList(assetList(build.assets.scripts)).mkString("\n")
     val stylesheetList = assetList(build.assets.stylesheets).mkString("\n")
+
+    // TODO: Make the addition of the prohibition phrase configurable.
+    //       Not everybody wants this.
+    val footerText =
+      if (deploy.isRevert) Json.fromString("[gets:prohibit]") else Json.Null
 
     currentTimestamp map { timestamp =>
       json"""
@@ -62,7 +72,10 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
           {"name": "Scripts", "value": $scriptList},
           {"name": "Stylesheets", "value": $stylesheetList}
         ],
-        "timestamp": $timestamp
+        "timestamp": $timestamp,
+        "footer": {
+          "text": $footerText
+        }
       }
       """
     } map { embed =>
@@ -75,12 +88,12 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
     }
   }
 
-  override def publish(build: Build): F[Unit] = {
+  override def publish(deploy: Deploy): F[Unit] = {
     val message =
-      show"Publishing ${build.branch} ${build.buildNumber} to Discord webhook ${webhook.id}"
+      show"Publishing ${deploy.build.branch} ${deploy.build.buildNumber} to Discord webhook ${webhook.id}"
     for {
       _     <- Logger[F].info(message)
-      embed <- embedForBuild(build)
+      embed <- embedForDeploy(deploy)
       request = POST(embed, webhook.uri, Headers.userAgentHeader)
       _ <- httpClient.expect[Unit](request)
     } yield ()

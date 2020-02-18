@@ -54,16 +54,16 @@ class Poller[F[_]: Timer] private (config: Config)(
       new StdoutPublisher[F](format)
   }
 
-  /** Publishes a [[discord.Build]] to a list of [[PublisherSetting]]s. */
-  def publish(build: Build, publisherSettings: List[PublisherSetting])(
+  /** Publishes a [[discord.Deploy]] to a list of [[PublisherSetting]]s. */
+  def publish(deploy: Deploy, publisherSettings: List[PublisherSetting])(
       implicit httpClient: Client[F],
   ): F[Unit] = {
     publisherSettings
-      .filter(_.branches.contains(build.branch))
+      .filter(_.branches.contains(deploy.build.branch))
       .map(buildPublisher)
       .map(publisher =>
-        L.info(s"Publishing fresh ${build.branch} build to $publisher")
-          *> publisher.publish(build),
+        L.info(s"Publishing fresh ${deploy.build.branch} build to $publisher")
+          *> publisher.publish(deploy),
       )
       .sequence
       .void
@@ -74,15 +74,22 @@ class Poller[F[_]: Timer] private (config: Config)(
       freshnessMap: BuildMap.Type,
       build: Build,
       config: Config,
-  )(implicit httpClient: Client[F]): F[BuildMap.Type] =
-    if (freshnessMap
-          .getOrElse(build.branch, none[Int])
-          .forall(build.buildNumber > _))
-      publish(build, config.publishers)
+  )(implicit httpClient: Client[F]): F[BuildMap.Type] = {
+    val currentBuildNumber = build.buildNumber
+    val lastBuildNumber    = freshnessMap.getOrElse(build.branch, none[Int])
+
+    if (lastBuildNumber.forall(currentBuildNumber != _)) {
+      // Compare the build number of the build we just received to the last build
+      // number.
+      val isRevert = lastBuildNumber.exists(currentBuildNumber < _)
+      val deploy   = Deploy(build, isRevert)
+
+      publish(deploy, config.publishers)
         .handleErrorWith(L.error(_)(show"Failed to publish $build"))
         .as(freshnessMap.updated(build.branch, build.buildNumber.some))
-    else
+    } else
       F.pure(freshnessMap)
+  }
 
   /** Polls and publishes builds from all branches forever. */
   def poller(implicit httpClient: Client[F]): Stream[F, Unit] = {
