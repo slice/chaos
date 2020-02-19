@@ -57,11 +57,6 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
       labelScriptList(assetList(build.assets.scripts)).mkString("\n")
     val stylesheetList = assetList(build.assets.stylesheets).mkString("\n")
 
-    // TODO: Make the addition of the prohibition phrase configurable.
-    //       Not everybody wants this.
-    val footerText =
-      if (deploy.isRevert) Json.fromString("[gets:prohibit]") else Json.Null
-
     currentTimestamp map { timestamp =>
       json"""
       {
@@ -72,10 +67,7 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
           {"name": "Scripts", "value": $scriptList},
           {"name": "Stylesheets", "value": $stylesheetList}
         ],
-        "timestamp": $timestamp,
-        "footer": {
-          "text": $footerText
-        }
+        "timestamp": $timestamp
       }
       """
     } map { embed =>
