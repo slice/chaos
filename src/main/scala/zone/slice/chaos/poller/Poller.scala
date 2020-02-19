@@ -45,7 +45,7 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
       .parJoin(Branch.all.size)
 
   /** Builds a [[publisher.Publisher]] from a [[PublisherSetting]]. */
-  protected def buildPublisher(
+  private[chaos] def buildPublisher(
       setting: PublisherSetting,
   )(implicit httpClient: Client[F]): Publisher[F] = setting match {
     case DiscordPublisherSetting(id, token, _) =>

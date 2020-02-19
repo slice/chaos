@@ -15,23 +15,29 @@ val log4catsVersion       = "1.0.1"
 val fs2Version            = "2.2.1"
 val logbackVersion        = "1.2.3"
 val typesafeConfigVersion = "1.4.0"
+val scalaTestVersion      = "3.1.0"
+val mockitoScalaVersion   = "1.11.2"
 
 val dependencies = Seq(
-  "org.http4s"        %% "http4s-blaze-client"  % http4sVersion,
-  "org.http4s"        %% "http4s-dsl"           % http4sVersion,
-  "org.http4s"        %% "http4s-circe"         % http4sVersion,
-  "io.circe"          %% "circe-core"           % circeVersion,
-  "io.circe"          %% "circe-literal"        % circeVersion,
-  "io.circe"          %% "circe-generic"        % circeVersion,
-  "io.circe"          %% "circe-config"         % circeConfigVersion,
-  "io.circe"          %% "circe-generic-extras" % circeVersion,
-  "org.typelevel"     %% "cats-core"            % catsVersion,
-  "org.typelevel"     %% "cats-effect"          % catsVersion,
-  "co.fs2"            %% "fs2-core"             % fs2Version,
-  "io.chrisdavenport" %% "log4cats-core"        % log4catsVersion,
-  "io.chrisdavenport" %% "log4cats-slf4j"       % log4catsVersion,
-  "ch.qos.logback"    % "logback-classic"       % logbackVersion,
-  "com.typesafe"      % "config"                % typesafeConfigVersion,
+  "org.http4s"        %% "http4s-blaze-client"     % http4sVersion,
+  "org.http4s"        %% "http4s-dsl"              % http4sVersion,
+  "org.http4s"        %% "http4s-circe"            % http4sVersion,
+  "io.circe"          %% "circe-core"              % circeVersion,
+  "io.circe"          %% "circe-literal"           % circeVersion,
+  "io.circe"          %% "circe-generic"           % circeVersion,
+  "io.circe"          %% "circe-config"            % circeConfigVersion,
+  "io.circe"          %% "circe-generic-extras"    % circeVersion,
+  "org.typelevel"     %% "cats-core"               % catsVersion,
+  "org.typelevel"     %% "cats-effect"             % catsVersion,
+  "co.fs2"            %% "fs2-core"                % fs2Version,
+  "io.chrisdavenport" %% "log4cats-core"           % log4catsVersion,
+  "io.chrisdavenport" %% "log4cats-slf4j"          % log4catsVersion,
+  "io.chrisdavenport" %% "log4cats-testing"        % log4catsVersion % "test",
+  "ch.qos.logback"    % "logback-classic"          % logbackVersion,
+  "com.typesafe"      % "config"                   % typesafeConfigVersion,
+  "org.scalatest"     %% "scalatest"               % scalaTestVersion % "test",
+  "org.mockito"       %% "mockito-scala"           % mockitoScalaVersion % "test",
+  "org.mockito"       %% "mockito-scala-scalatest" % mockitoScalaVersion % "test",
 )
 
 lazy val root = (project in file("."))
@@ -55,4 +61,5 @@ lazy val root = (project in file("."))
     buildInfoPackage := "zone.slice.chaos",
   )
 
+scalacOptions in Test ++= Seq("-Yrangepos")
 javaOptions in reStart += "-Dconfig.file=./application.conf"
