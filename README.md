@@ -98,7 +98,7 @@ Group=chaos
 WorkingDirectory=~
 ExecStart=/usr/bin/java \
   -Dconfig.file=/home/chaos/chaos.conf \
-  /home/chaos/target/scala-2.13/chaos-assembly-0.0.0.jar
+  -jar /home/chaos/target/scala-2.13/chaos-assembly-0.0.0.jar
 
 [Install]
 WantedBy=multi-user.target
