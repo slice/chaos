@@ -69,12 +69,12 @@ class SourceSpec extends ChaosSpec {
         .unsafeRunCancelable(_ => ())
 
       // Stream#parJoin takes a bit of time to start emitting stuff.
-      Thread.sleep(50L)
+      Thread.sleep(500L)
       tapper(*) wasCalled twice
 
       ctx.tick(10.millis)
       // Ditto.
-      Thread.sleep(50L)
+      Thread.sleep(500L)
       tapper(*) wasCalled 4.times
 
       cancel.run()
