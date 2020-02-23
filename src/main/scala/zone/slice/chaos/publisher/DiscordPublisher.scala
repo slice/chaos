@@ -2,7 +2,7 @@ package zone.slice.chaos
 package publisher
 
 import discord._
-import scraper.Headers
+import source.Headers
 
 import cats.implicits._
 import cats.effect.Sync

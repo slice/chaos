@@ -3,7 +3,6 @@ package source
 package discord
 
 import zone.slice.chaos.discord._
-import scraper._
 
 import cats.effect._
 import cats.implicits._
