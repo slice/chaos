@@ -11,11 +11,15 @@ chaos is a purely functional Discord build scraper written in [Scala]. It uses
 [sbt]: https://www.scala-sbt.org
 [hocon]: https://github.com/lightbend/config/blob/master/HOCON.md
 
+## Requirements
+
+- JDK 8
+  - Newer versions may work, but the code is only tested with JDK 8.
+- sbt ([instructions](https://www.scala-sbt.org/1.x/docs/Setup.html))
+
 ## Compiling
 
-Make sure you have a Java Development Kit (JDK) installed. Then, install [sbt]
-([instructions here](https://www.scala-sbt.org/1.x/docs/Setup.html)). After
-cloning, run `sbt assembly`:
+After cloning the code, run `sbt assembly`:
 
 ```sh
 $ git clone https://github.com/slice/chaos.git && cd chaos
@@ -27,10 +31,10 @@ self-contained JAR file with all bytecode and dependencies.
 
 ## Usage
 
-chaos works by repeatedly fetching the Discord client at a user-specified
-interval and extracting metadata from the client HTML and scripts. This metadata
-can then be published to various consumers (called "publishers"), e.g. `stdout`
-or a Discord webhook.
+chaos works by repeatedly fetching the Discord frontend at a user-specified
+interval and extracting metadata from the frontend HTML and scripts. This
+metadata can then be published to various consumers (called "publishers"), e.g.
+`stdout` or a Discord webhook.
 
 All logs are sent to `stderr`, so feel free to pipe `stdout` to anywhere you'd
 like when using the `stdout` publisher.
@@ -43,7 +47,7 @@ chaos uses [HOCON] for configuration. Create your configuration file,
 ```yaml
 # The interval to poll Discord at. Please be courteous when setting this value.
 # Supported units: second(s), minute(s), hour(s), day(s)
-interval: 1 minute
+interval: 5 minutes
 
 publishers: [
   # Let's add a `discord` publisher to publish new builds to a Discord webhook.
@@ -142,10 +146,19 @@ https://discordapp.com/api/webhooks/$id/$token
 
 Prints new builds to `stdout` through a format string. Available variables:
 
-| Variable               | Value                                                                                    |
-| ---------------------- | ---------------------------------------------------------------------------------------- |
-| `$branch`              | The name of the branch that the build is from.                                           |
-| `$build_number`        | The build number of the build from Discord.                                              |
-| `$hash`                | The hash ("Version Hash") of the build from Discord.                                     |
-| `$asset_filename_list` | A list of all build asset filenames, separated by `,`.                                   |
-| `$is_revert`           | A boolean (`true` or `false`) indicating if this build was previously deployed recently. |
+| Variable               | Value                                                             |
+| ---------------------- | ----------------------------------------------------------------- |
+| `$branch`              | The name of the branch that the build is from.                    |
+| `$build_number`        | The build number of the build from Discord.                       |
+| `$hash`                | The hash ("Version Hash") of the build from Discord.              |
+| `$asset_filename_list` | A list of all build asset filenames, separated by `,`.            |
+| `$is_revert`           | A boolean (`true` or `false`) indicating if this build isn't new. |
+
+## Internals
+
+### Revert detection
+
+Reverts are detected by checking if the build number has decreased instead of
+increased. For example, if build 25000 was deployed after build 26000, that
+would be detected as a revert. We assume that a lower build number means that
+the build is older and was previously deployed.
