@@ -3,8 +3,8 @@ package poller
 
 import discord._
 import publisher._
-import scraper._
 import source._
+import source.discord._
 
 import java.util.concurrent.Executors
 
@@ -16,7 +16,6 @@ import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
 
 class Poller[F[_]: Timer] private[chaos] (config: Config)(
     implicit F: ConcurrentEffect[F],
@@ -69,7 +68,7 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
 
   def frontendPoller(
       branches: Set[Branch],
-      source: DiscordFrontendSource[F],
+      source: FrontendSource[F],
   )(implicit httpClient: Client[F]): F[Unit] = {
     Stream
       .emits(branches.toSeq)
@@ -95,8 +94,7 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
     val branches =
       if (specifiedBranches.isEmpty) Branch.all else specifiedBranches
 
-    val scraper               = new Scraper(httpClient)
-    val discordFrontendSource = new DiscordFrontendSource[F](scraper)
+    val discordFrontendSource = new FrontendSource[F](httpClient)
 
     L.info(show"Scraping ${branches.size} branch(es): ${branches}") *>
       frontendPoller(branches, discordFrontendSource)

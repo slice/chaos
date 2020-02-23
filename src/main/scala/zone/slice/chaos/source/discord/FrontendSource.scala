@@ -1,8 +1,9 @@
 package zone.slice.chaos
-package scraper
+package source
+package discord
 
-import discord._
-import errors._
+import zone.slice.chaos.discord._
+import scraper._
 
 import cats.effect._
 import cats.implicits._
@@ -10,16 +11,25 @@ import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import org.http4s.{Request, Uri}
 import org.http4s.client.Client
+import fs2.Stream
 
-import scala.util.matching.Regex
+import scala.util.matching._
 
 /**
-  * Downloads Discord client bundles and extracts metdata from them (in the form
-  * of [[discord.Build]] objects).
+  * A [[Source]] for Discord frontend [[discord.Build builds]].
   *
-  * Effects are executed within `F`.
+  * @param scraper the scraper
   */
-class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
+class FrontendSource[F[_]](val httpClient: Client[F])(
+    implicit F: Sync[F],
+) extends Source[F, Build] {
+  import FrontendSource._
+
+  type K = Branch
+
+  def builds(branch: Branch): Stream[F, Build] = {
+    Stream.repeatEval(scrape(branch))
+  }
 
   protected implicit def unsafeLogger: Logger[F] =
     Slf4jLogger.getLogger[F]
@@ -30,17 +40,12 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
     Logger[F].debug(s"GET $uri") *> httpClient.expect[String](request)
   }
 
-  /** Downloads the main client HTML for a [[discord.Branch]]. */
+  /** Downloads the main client HTML of a [[discord.Branch]]. */
   def fetchClient(branch: Branch): F[String] =
     fetch(branch.uri / "channels" / "@me")
 
-  /** Extracts assets (scripts and styles) from the HTML of `/channels/@me`. */
+  /** Extracts assets from the HTML of `/channels/@me`. */
   def extractAssets(pageHtml: String): F[AssetBundle] = {
-    val scriptTagRegex =
-      """<script src="/assets/([.a-f0-9]+)\.js" integrity="[^"]+"></script>""".r.unanchored
-    val styleTagRegex =
-      """<link rel="stylesheet" href="/assets/([.a-f0-9]+)\.css" integrity="[^"]+">""".r.unanchored
-
     def pull[A <: Asset](
         creator: String => A,
         notFoundException: Exception,
@@ -51,21 +56,21 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
       else F.pure(hashes.map(creator).toVector)
     }
 
+    import FrontendSourceError._
     (
-      pull(Asset.Script, ExtractorError.NoScripts, scriptTagRegex),
-      pull(Asset.Stylesheet, ExtractorError.NoStylesheets, styleTagRegex),
+      pull(Asset.Script, NoScripts, scriptTagRegex),
+      pull(Asset.Stylesheet, NoStylesheets, styleTagRegex),
     ).tupled.map {
       case (scripts, stylesheets) => AssetBundle(scripts, stylesheets)
     }
   }
 
-  /** Fetches and extracts the build number and build hash from an
-    * [[discord.AssetBundle]]. */
+  /**
+    * Fetches and extracts the build number and build hash from an
+    * [[discord.AssetBundle]].
+    */
   def fetchBuildInfo(assets: AssetBundle): F[(Int, String)] = {
-    val buildMetadataRegex =
-      """Build Number: (\d+), Version Hash: ([a-f0-9]+)""".r.unanchored
-
-    import ExtractorError._
+    import FrontendSourceError._
     for {
       mainScript <- F.fromOption(assets.scripts.lastOption, NoScripts)
       text       <- fetch(mainScript.uri)
@@ -94,4 +99,19 @@ class Scraper[F[_]](val httpClient: Client[F])(implicit F: Sync[F]) {
       assets = assetBundle,
     )
   }
+}
+
+object FrontendSource {
+
+  /** The regex for matching script tags. */
+  lazy val scriptTagRegex: UnanchoredRegex =
+    """<script src="/assets/([.a-f0-9]+)\.js" integrity="[^"]+"></script>""".r.unanchored
+
+  /** The regex for matching style tags. */
+  lazy val styleTagRegex: UnanchoredRegex =
+    """<link rel="stylesheet" href="/assets/([.a-f0-9]+)\.css" integrity="[^"]+">""".r.unanchored
+
+  /** The regex for matching the build number and version hash. */
+  lazy val buildMetadataRegex: UnanchoredRegex =
+    """Build Number: (\d+), Version Hash: ([a-f0-9]+)""".r.unanchored
 }
