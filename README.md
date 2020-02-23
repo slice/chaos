@@ -13,7 +13,7 @@ chaos is a purely functional Discord build scraper written in [Scala]. It uses
 
 ## Compiling
 
-Make sure you have the Java Development Kit (JDK) installed. Then, install [sbt]
+Make sure you have a Java Development Kit (JDK) installed. Then, install [sbt]
 ([instructions here](https://www.scala-sbt.org/1.x/docs/Setup.html)). After
 cloning, run `sbt assembly`:
 
