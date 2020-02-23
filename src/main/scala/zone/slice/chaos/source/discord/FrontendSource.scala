@@ -95,7 +95,7 @@ class FrontendSource[F[_]](val httpClient: Client[F])(
     } yield Build(
       branch = branch,
       hash = info._2,
-      buildNumber = info._1,
+      number = info._1,
       assets = assetBundle,
     )
   }

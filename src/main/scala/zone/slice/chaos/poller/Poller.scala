@@ -59,7 +59,7 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
     val build = result.build
     // Revert heuristics: simply check if the build number has gone down instead
     // of up.
-    val isRevert = result.previous.exists(build.buildNumber < _.buildNumber)
+    val isRevert = result.previous.exists(build.number < _.number)
     val deploy   = Deploy(result.build, isRevert)
 
     publish(deploy, config.publishers)

@@ -12,14 +12,14 @@ import cats.implicits._
 final case class Build(
     branch: Branch,
     hash: String,
-    buildNumber: Int,
+    number: Int,
     assets: AssetBundle,
 )
 
 object Build {
   implicit val showBuild: Show[Build] = (build: Build) =>
-    show"Build(${build.branch}, ${build.buildNumber}, assets = ${build.assets})"
+    show"Build(${build.branch}, ${build.number}, assets = ${build.assets})"
 
   implicit val eqBuild: Eq[Build] = (l: Build, r: Build) =>
-    l.buildNumber == r.buildNumber && l.branch == r.branch
+    l.number == r.number && l.branch == r.branch
 }

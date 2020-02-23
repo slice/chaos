@@ -22,8 +22,8 @@ class PollerSpec extends ChaosSpec {
     val spiedPoller = spy(poller)
   }
 
-  def makeBuild(buildNumber: Int): Build =
-    Build(Canary, "", buildNumber, AssetBundle.empty)
+  def makeBuild(number: Int): Build =
+    Build(Canary, "", number, AssetBundle.empty)
   def makeDeploy(buildNumber: Int): Deploy =
     Deploy(makeBuild(buildNumber), false)
 

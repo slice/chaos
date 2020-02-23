@@ -49,8 +49,8 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
 
     val title =
       if (deploy.isRevert)
-        show"\u21a9\ufe0f ${build.branch} reverted to ${build.buildNumber}"
-      else show"${build.branch} ${build.buildNumber}"
+        show"\u21a9\ufe0f ${build.branch} reverted to ${build.number}"
+      else show"${build.branch} ${build.number}"
     val description = s"Hash: `${build.hash}`"
 
     val scriptList =
@@ -82,7 +82,7 @@ class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
 
   override def publish(deploy: Deploy): F[Unit] = {
     val message =
-      show"Publishing ${deploy.build.branch} ${deploy.build.buildNumber} to Discord webhook ${webhook.id}"
+      show"Publishing ${deploy.build.branch} ${deploy.build.number} to Discord webhook ${webhook.id}"
     for {
       _     <- Logger[F].info(message)
       embed <- embedForDeploy(deploy)

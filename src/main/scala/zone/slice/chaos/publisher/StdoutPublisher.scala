@@ -12,7 +12,7 @@ class StdoutPublisher[F[_]: Sync](format: String) extends Publisher[F] {
 
     Map(
       "branch"       -> build.branch.toString,
-      "build_number" -> build.buildNumber.toString,
+      "build_number" -> build.number.toString,
       "hash"         -> build.hash,
       "is_revert"    -> deploy.isRevert.toString,
       "asset_filename_list" -> build.assets.all
