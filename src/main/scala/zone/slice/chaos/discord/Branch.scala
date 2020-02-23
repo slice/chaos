@@ -1,12 +1,8 @@
 package zone.slice.chaos
 package discord
 
-import scraper._
-
 import io.circe.{Decoder, DecodingFailure}
-import fs2._
 import cats.Show
-import cats.effect._
 import org.http4s.Uri
 import org.http4s.implicits._
 
@@ -23,10 +19,6 @@ sealed trait Branch {
         Uri.unsafeFromString(s"https://$subdomain.discordapp.com")
       case None => uri"https://discordapp.com"
     }
-
-  /** The fs2 Stream of builds for this branch. */
-  def buildStream[F[_]: Sync](scraper: Scraper[F]): Stream[F, Build] =
-    Stream.repeatEval(scraper.scrape(this))
 
   /** The "color" of this branch. */
   def color: Int = this match {

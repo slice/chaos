@@ -1,7 +1,7 @@
 package zone.slice.chaos
 package discord
 
-import cats.Show
+import cats.{Show, Eq}
 import cats.implicits._
 
 /** A Discord client build for a specific [[Branch]].
@@ -19,4 +19,7 @@ final case class Build(
 object Build {
   implicit val showBuild: Show[Build] = (build: Build) =>
     show"Build(${build.branch}, ${build.buildNumber}, assets = ${build.assets})"
+
+  implicit val eqBuild: Eq[Build] = (l: Build, r: Build) =>
+    l.buildNumber == r.buildNumber && l.branch == r.branch
 }

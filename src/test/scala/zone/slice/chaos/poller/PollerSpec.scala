@@ -5,12 +5,11 @@ import publisher._
 import discord._
 import Branch._
 import poller._
+import source._
 
 import io.chrisdavenport.log4cats.testing.TestingLogger
-import fs2.Stream
 import cats.implicits._
 import cats.effect._
-import org.scalatest.Inspectors
 
 import scala.concurrent.duration._
 
@@ -18,8 +17,9 @@ class PollerSpec extends ChaosSpec {
   trait PollerFixture extends LoggingFixture with OkHttpClientFixture {
     val publisher =
       StdoutPublisherSetting("[test] $branch $build_number", Set(Canary))
-    val config = Config(interval = 1.second, publishers = List(publisher))
-    val poller = new Poller[IO](config)
+    val config      = Config(interval = 1.second, publishers = List(publisher))
+    val poller      = new Poller[IO](config)
+    val spiedPoller = spy(poller)
   }
 
   def makeBuild(buildNumber: Int): Build =
@@ -28,52 +28,53 @@ class PollerSpec extends ChaosSpec {
     Deploy(makeBuild(buildNumber), false)
 
   "poller" - {
-    "scans a build map" in new PollerFixture {
-      Inspectors.forAll(List(none, 100.some, 1000.some)) { value =>
-        val map: BuildMap.Type = Map(Canary -> value)
-        val build              = makeBuild(500)
+    "taps from a source" in new PollerFixture {
+      val current  = makeBuild(100)
+      val previous = makeBuild(50)
 
-        poller.consumeBuild(map, build).run() should contain(Canary -> 500.some)
-      }
+      spiedPoller.pollTap(PollResult(current, previous.some)).run()
+      spiedPoller.publish(Deploy(current, isRevert = false), List(publisher)) wasCalled once
     }
 
     "detects reverts" in new PollerFixture {
-      val spiedPoller = spy(poller)
-      val build       = makeBuild(100)
+      val current = makeBuild(1)
 
-      spiedPoller.consumeBuild(Map(Canary -> Some(200)), build)
-      spiedPoller.publish(Deploy(build, isRevert = true), List(publisher)) wasCalled once
+      forAll(Seq(makeBuild(100).some, none)) { previous =>
+        spiedPoller.pollTap(PollResult(current, previous)).run()
+        spiedPoller.publish(Deploy(current, isRevert = true), List(publisher)) wasCalled once
+      }
     }
 
-    "logs polling errors" in new PollerFixture {
-      val exception   = new Exception("something went wrong")
-      val spiedPoller = spy(poller)
+    // The following test crashes scalac. Nice.
 
-      // Stub scrape stream to only return an error.
-      val stream: Stream[IO, (Branch, Either[Throwable, Build])] =
-        Stream((Canary, Left(exception))).covary[IO]
-      spiedPoller.scrapeStream(Set(Canary), 1.second) returns stream
+    // "logs polling errors" in new PollerFixture {
+    //   val exception = new Exception("i'm green da ba dee")
 
-      // Run poller so that it can log the exception.
-      spiedPoller.poller.compile.drain.run()
+    //   val source = mock[DiscordFrontendSource[IO]]
+    //   import fs2.Stream
+    //   Stream.raiseError[IO](exception) willBe returned by source.poll(*, *)(*)
 
-      val message =
-        TestingLogger.ERROR("Failed to scrape Canary", Some(exception))
-      logged.run() should contain(message)
-    }
+    //   spiedPoller.frontendPoller(Set(Canary), source).unsafeRunTimed(250.millis)
+
+    //   val message =
+    //     TestingLogger.ERROR(
+    //       show"Failed to poll scrape ${Canary}",
+    //       Some(exception),
+    //     )
+    //   logged.run() should contain(message)
+    // }
 
     "logs publishing errors" in new PollerFixture {
-      val exception   = new Exception("i'm blue da ba dee")
-      val spiedPoller = spy(poller)
-      val build       = makeBuild(100)
-      val deploy      = Deploy(build, isRevert = false)
+      val exception = new Exception("i'm blue da ba dee")
+      val build     = makeBuild(100)
+      val deploy    = Deploy(build, isRevert = false)
 
       // Force Poller#publish to raise an error.
       spiedPoller.publish(deploy, List(publisher)) returns IO.raiseError(
         exception,
       )
 
-      spiedPoller.consumeBuild(BuildMap.default, build).run()
+      spiedPoller.pollTap(PollResult(build, none)).run()
 
       val message =
         TestingLogger.ERROR(show"Failed to publish $build", Some(exception))
@@ -81,8 +82,7 @@ class PollerSpec extends ChaosSpec {
     }
 
     "publishes" in new PollerFixture {
-      val spiedPoller = spy(poller)
-      val deploy      = makeDeploy(100)
+      val deploy = makeDeploy(100)
 
       val fakePublisherSetting = mock[PublisherSetting]
       fakePublisherSetting.branches returns Set(Canary)

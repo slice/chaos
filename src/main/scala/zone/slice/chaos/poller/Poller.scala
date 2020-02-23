@@ -4,6 +4,7 @@ package poller
 import discord._
 import publisher._
 import scraper._
+import source._
 
 import java.util.concurrent.Executors
 
@@ -30,20 +31,6 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
   ): Stream[F, FiniteDuration] =
     Stream(0.seconds) ++ Stream.awakeDelay[F](rate)
 
-  /** A metered fs2 Stream of all builds from some branches. */
-  def scrapeStream(branches: Set[Branch], rate: FiniteDuration)(
-      implicit httpClient: Client[F],
-  ): Stream[F, (Branch, Either[Throwable, Build])] =
-    Stream
-      .emits(branches.toList)
-      .map { branch =>
-        eagerAwakeDelay(rate)
-          .as(branch)
-          .zipRight(branch.buildStream(new Scraper(httpClient)).attempt.repeat)
-          .map((branch, _))
-      }
-      .parJoin(Branch.all.size)
-
   /** Builds a [[publisher.Publisher]] from a [[PublisherSetting]]. */
   private[chaos] def buildPublisher(
       setting: PublisherSetting,
@@ -69,29 +56,44 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
       .void
   }
 
-  /** Consumes a single build, returning an updated [[BuildMap]]. */
-  def consumeBuild(
-      freshnessMap: BuildMap.Type,
-      build: Build,
-  )(implicit httpClient: Client[F]): F[BuildMap.Type] = {
-    val currentBuildNumber = build.buildNumber
-    val lastBuildNumber    = freshnessMap.getOrElse(build.branch, none[Int])
+  /**
+    * Processes a [[discord.Build]] from a poll, creating a [[discord.Deploy]]
+    * from it and publishing it to the configured publishers.
+    */
+  def pollTap(
+      result: PollResult[Build],
+  )(implicit httpClient: Client[F]): F[Unit] = {
+    val build = result.build
+    // Revert heuristics: simply check if the build number has gone down instead
+    // of up.
+    val isRevert = result.previous.exists(build.buildNumber < _.buildNumber)
+    val deploy   = Deploy(result.build, isRevert)
 
-    if (lastBuildNumber.forall(currentBuildNumber != _)) {
-      // Compare the build number of the build we just received to the last build
-      // number.
-      val isRevert = lastBuildNumber.exists(currentBuildNumber < _)
-      val deploy   = Deploy(build, isRevert)
+    publish(deploy, config.publishers)
+      .handleErrorWith(L.error(_)(show"Failed to publish $build"))
+  }
 
-      publish(deploy, config.publishers)
-        .handleErrorWith(L.error(_)(show"Failed to publish $build"))
-        .as(freshnessMap.updated(build.branch, build.buildNumber.some))
-    } else
-      F.pure(freshnessMap)
+  def frontendPoller(
+      branches: Set[Branch],
+      source: DiscordFrontendSource[F],
+  )(implicit httpClient: Client[F]): F[Unit] = {
+    Stream
+      .emits(branches.toSeq)
+      .map(branch =>
+        source
+          .poll(branch, rate = config.interval)(
+            pollTap,
+            L.error(_)(show"Failed to scrape $branch"),
+          )
+          .drain,
+      )
+      .parJoinUnbounded
+      .compile
+      .drain
   }
 
   /** Polls and publishes builds from all branches forever. */
-  def poller(implicit httpClient: Client[F]): Stream[F, Unit] = {
+  def poller(implicit httpClient: Client[F]): F[Unit] = {
     // Compute the branches that we have to scrape from. If all publishers are
     // configured to only scrape from the Canary branch, then we can simply only
     // scrape from that branch.
@@ -99,28 +101,20 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
     val branches =
       if (specifiedBranches.isEmpty) Branch.all else specifiedBranches
 
-    Stream.eval(L.info(show"Scraping ${branches.size} branch(es): ${branches}")) ++
-      scrapeStream(branches, rate = config.interval)
-        .evalScan(BuildMap.default) {
-          case (freshnessMap, (branch, Left(error))) =>
-            L.error(error)(show"Failed to scrape $branch")
-              .as(freshnessMap)
-          case (freshnessMap, (_, Right(build))) =>
-            consumeBuild(freshnessMap, build)
-        }
-        .drain
+    val scraper               = new Scraper(httpClient)
+    val discordFrontendSource = new DiscordFrontendSource[F](scraper)
+
+    L.info(show"Scraping ${branches.size} branch(es): ${branches}") *>
+      frontendPoller(branches, discordFrontendSource)
   }
 
   /** Starts this poller and runs it forever. */
   def runForever: F[Unit] =
     L.info(show"Starting poller (interval: ${config.interval})") *>
-      Stream
-        .resource(BlazeClientBuilder[F](executionContext).resource)
-        .flatMap { implicit httpClient =>
+      BlazeClientBuilder[F](executionContext).resource.use {
+        implicit httpClient =>
           poller
-        }
-        .compile
-        .drain
+      }
 }
 
 object Poller {

@@ -29,6 +29,7 @@ val dependencies = Seq(
   "io.circe"          %% "circe-generic-extras"    % circeVersion,
   "org.typelevel"     %% "cats-core"               % catsVersion,
   "org.typelevel"     %% "cats-effect"             % catsVersion,
+  "org.typelevel"     %% "cats-effect-laws"        % catsVersion % "test",
   "co.fs2"            %% "fs2-core"                % fs2Version,
   "io.chrisdavenport" %% "log4cats-core"           % log4catsVersion,
   "io.chrisdavenport" %% "log4cats-slf4j"          % log4catsVersion,
@@ -40,7 +41,7 @@ val dependencies = Seq(
   "org.mockito"       %% "mockito-scala-scalatest" % mockitoScalaVersion % "test",
 )
 
-lazy val root = (project in file("."))
+lazy val chaos = (project in file("."))
   .enablePlugins(BuildInfoPlugin)
   .settings(
     name := "chaos",
@@ -62,4 +63,7 @@ lazy val root = (project in file("."))
   )
 
 scalacOptions in Test ++= Seq("-Yrangepos")
+// A workaround for some type inference issues.
+// See: https://github.com/mockito/mockito-scala/issues/29
+scalacOptions in Test -= "-Wdead-code"
 javaOptions in reStart += "-Dconfig.file=./application.conf"
