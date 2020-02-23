@@ -32,7 +32,7 @@ class PollerSpec extends ChaosSpec {
       val current  = makeBuild(100)
       val previous = makeBuild(50)
 
-      spiedPoller.pollTap(PollResult(current, previous.some)).run()
+      spiedPoller.pollTap(PollResult(current, previous.some)).unsafeRunSync()
       spiedPoller.publish(Deploy(current, isRevert = false), List(publisher)) wasCalled once
     }
 
@@ -40,7 +40,7 @@ class PollerSpec extends ChaosSpec {
       val current = makeBuild(1)
 
       forAll(Seq(makeBuild(100).some, none)) { previous =>
-        spiedPoller.pollTap(PollResult(current, previous)).run()
+        spiedPoller.pollTap(PollResult(current, previous)).unsafeRunSync()
         spiedPoller.publish(Deploy(current, isRevert = true), List(publisher)) wasCalled once
       }
     }
@@ -61,7 +61,7 @@ class PollerSpec extends ChaosSpec {
     //       show"Failed to poll scrape ${Canary}",
     //       Some(exception),
     //     )
-    //   logged.run() should contain(message)
+    //   logged.unsafeRunSync() should contain(message)
     // }
 
     "logs publishing errors" in new PollerFixture {
@@ -74,11 +74,11 @@ class PollerSpec extends ChaosSpec {
         exception,
       )
 
-      spiedPoller.pollTap(PollResult(build, none)).run()
+      spiedPoller.pollTap(PollResult(build, none)).unsafeRunSync()
 
       val message =
         TestingLogger.ERROR(show"Failed to publish $build", Some(exception))
-      logged.run() should contain(message)
+      logged.unsafeRunSync() should contain(message)
     }
 
     "publishes" in new PollerFixture {
@@ -99,7 +99,7 @@ class PollerSpec extends ChaosSpec {
 
       spiedPoller
         .publish(deploy, List(fakePublisherSetting))
-        .run()
+        .unsafeRunSync()
       fakePublisher.publish(deploy) wasCalled once
     }
   }

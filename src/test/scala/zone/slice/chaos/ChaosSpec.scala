@@ -19,10 +19,4 @@ abstract class ChaosSpec
   implicit val timer: Timer[IO] = IO.timer(ExecutionContext.global)
   implicit val contextShift: ContextShift[IO] =
     IO.contextShift(ExecutionContext.global)
-
-  implicit class IOOps[A](val io: IO[A]) {
-
-    /** Alias for unsafeRunSync. */
-    def run(): A = io.unsafeRunSync()
-  }
 }

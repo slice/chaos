@@ -35,7 +35,7 @@ class SourceSpec extends ChaosSpec {
 
   "source" - {
     "emits builds" in new SourceFixture {
-      val builds = source.builds("cat").take(5).compile.toVector.run()
+      val builds = source.builds("cat").take(5).compile.toVector.unsafeRunSync()
       forAll(builds)(_ should fullyMatch regex "cat, \\d+")
     }
 
@@ -57,7 +57,7 @@ class SourceSpec extends ChaosSpec {
       ctx.tick(1.second)
       tapper(*) wasCalled 3.times
 
-      cancel.run()
+      cancel.unsafeRunSync()
     }
 
     "parallel polls" in new SourcePollFixture {
@@ -77,7 +77,7 @@ class SourceSpec extends ChaosSpec {
       Thread.sleep(500L)
       tapper(*) wasCalled 4.times
 
-      cancel.run()
+      cancel.unsafeRunSync()
     }
   }
 }
