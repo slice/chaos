@@ -25,12 +25,6 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
   protected val executionContext: ExecutionContext =
     ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
 
-  /** Equivalent to `Stream.awakeDelay`, but doesn't do a first sleep. */
-  protected def eagerAwakeDelay(
-      rate: FiniteDuration,
-  ): Stream[F, FiniteDuration] =
-    Stream(0.seconds) ++ Stream.awakeDelay[F](rate)
-
   /** Builds a [[publisher.Publisher]] from a [[PublisherSetting]]. */
   private[chaos] def buildPublisher(
       setting: PublisherSetting,
