@@ -31,12 +31,21 @@ class SourceSpec extends ChaosSpec {
     val tapper = mock[PollResult[String] => IO[Unit]]
     // tapper(*) answers ((thing: String) => IO(println(s"[tapper] $thing")))
     tapper(*) returns IO.unit
+
+    /**
+      * Shortcut function to check if a `PollResult` was tapped.
+      *
+      * This really only works for unique, one-time taps since we check if the
+      * tapper function was called once.
+      */
+    def wasTapped(build: String, previous: Option[String]): Unit =
+      tapper(PollResult(build, previous)) wasCalled once
   }
 
   "source" - {
     "emits builds" in new SourceFixture {
       val builds = source.builds("cat").take(5).compile.toVector.unsafeRunSync()
-      forAll(builds)(_ should fullyMatch regex "cat, \\d+")
+      all(builds) should fullyMatch regex "cat, \\d+"
     }
 
     "polls" in new SourcePollFixture {
@@ -47,15 +56,15 @@ class SourceSpec extends ChaosSpec {
         .unsafeRunCancelable(_ => ())
 
       // The initial pull should've been tapped by now.
-      tapper(*) wasCalled once
+      wasTapped("cat, 0", none)
 
       // After a second, the post-delay pull should've happened.
       ctx.tick(1.second)
-      tapper(*) wasCalled twice
+      wasTapped("cat, 1", "cat, 0".some)
 
       // After another second, another post-delay pull should've happened.
       ctx.tick(1.second)
-      tapper(*) wasCalled 3.times
+      wasTapped("cat, 2", "cat, 1".some)
 
       cancel.unsafeRunSync()
     }
@@ -70,11 +79,13 @@ class SourceSpec extends ChaosSpec {
 
       // Stream#parJoin takes a bit of time to start emitting stuff.
       Thread.sleep(500L)
-      tapper(*) wasCalled twice
+      wasTapped("cat, 0", none)
+      wasTapped("dog, 0", none)
 
       ctx.tick(10.millis)
-      // Ditto.
-      Thread.sleep(500L)
+      Thread.sleep(500L) // Ditto.
+      // We can't check the actual arguments because the order isn't
+      // deterministic.
       tapper(*) wasCalled 4.times
 
       cancel.unsafeRunSync()
