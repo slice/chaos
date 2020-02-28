@@ -47,10 +47,11 @@ trait Source[F[_], B] {
     * Scans builds forever, letting the caller tap into new builds as they
     * are detected.
     *
-    * "New" builds are determined using the `Eq` type class. If a build differs
-    * from the previous one (or there wasn't one at all), `onNewBuild` is
-    * invoked with a [[PollResult]]. This class encapsulates the new build and
-    * the build before it, allowing the caller to tap into additional context.
+    * "New" builds are determined using the `Order` type class. If a build
+    * differs from the previous one (or there wasn't one at all), `onNewBuild`
+    * is invoked with a [[PollResult]]. This class encapsulates the new build
+    * and the build before it, allowing the caller to tap into additional
+    * context.
     *
     * Errors do not halt polling. `onError` is called with any caught exception
     * that gets thrown, and the poller continues after the delay has passed.
@@ -66,7 +67,11 @@ trait Source[F[_], B] {
   )(
       onNewBuild: PollResult[B] => F[Unit],
       onError: Throwable => F[Unit],
-  )(implicit F: Applicative[F], E: Eq[B], T: Timer[F]): Stream[F, Nothing] = {
+  )(
+      implicit F: Applicative[F],
+      O: Order[B],
+      T: Timer[F],
+  ): Stream[F, Nothing] = {
     // Don't sleep before the first pull.
     (Stream(0.seconds) ++ Stream.awakeDelay[F](rate))
       .zipRight(builds(kind).attempt.repeat)
@@ -75,7 +80,7 @@ trait Source[F[_], B] {
           F.as(onError(error), acc)
         case (acc, Right(build)) =>
           val prev = acc.get(kind)
-          if (prev.forall(E.neqv(_, build)))
+          if (prev.forall(O.neqv(_, build)))
             F.as(onNewBuild(PollResult(build, prev)), acc.updated(kind, build))
           else
             F.pure(acc)
