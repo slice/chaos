@@ -79,5 +79,30 @@ class SourceSpec extends ChaosSpec {
 
       cancel.unsafeRunSync()
     }
+
+    "handles errors" in new SourcePollFixture {
+      val error = new Exception("oops, dropped something")
+
+      val failingSource = new Source[IO, String] {
+        type K = String
+
+        def builds(kind: String): Stream[IO, String] =
+          Stream(kind) ++ Stream.raiseError[IO](error)
+      }
+
+      val errorHandler = mock[Throwable => IO[Unit]]
+      errorHandler(*) returns IO.unit
+
+      val cancel = failingSource
+        .poll("cat", 10.millis)(tapper, errorHandler)
+        .compile
+        .drain
+        .unsafeRunCancelable(_ => ())
+
+      ctx.tick(10.millis)
+      errorHandler(error) wasCalled once
+
+      cancel.unsafeRunSync()
+    }
   }
 }
