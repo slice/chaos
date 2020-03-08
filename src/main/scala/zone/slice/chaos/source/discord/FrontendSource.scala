@@ -59,9 +59,7 @@ class FrontendSource[F[_]](val httpClient: Client[F])(
     (
       pull(Asset.Script, NoScripts, scriptTagRegex),
       pull(Asset.Stylesheet, NoStylesheets, styleTagRegex),
-    ).tupled.map {
-      case (scripts, stylesheets) => AssetBundle(scripts, stylesheets)
-    }
+    ).mapN(AssetBundle.apply)
   }
 
   /**
