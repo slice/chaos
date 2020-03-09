@@ -3,88 +3,110 @@ package source
 
 import cats._
 import cats.effect._
+import cats.implicits._
 import fs2.Stream
 
 import scala.concurrent.duration._
 
 /**
-  * The object given to the callback of `poll`.
+  * The object emitted by `Source#poll`.
   *
-  * Contains the current build and the previous build.
+  * It includes the current build alongside the previous one, if any. For the
+  * first poll, `previous` will be `None`.
   *
   * @param build the current build
   * @param previous the previous build
   * @tparam B the build type
   */
-case class PollResult[B](build: B, previous: Option[B])
+case class Poll[B](build: B, previous: Option[B])
 
 /**
-  * A source of constant builds of certain kinds.
+  * An infinite stream of builds (of type `B`) according to a certain variant
+  * (of type `V`).
   *
-  * Implementing this trait gives you access to `[[poll]]`, allowing you to
-  * poll and consume builds indefinitely.
+  * While the build type isn't parameterized on the variant type, it should
+  * directly determine the type of build emitted. For example, the variant type
+  * could be an algebraic data type representing platforms or branches, which
+  * would determine what kind of builds are emitted.
+  *
+  * The primary benefit that comes from implementing this trait is the
+  * `[[poll]]` method, which detects deploys of builds in an infinite stream.
   *
   * @param F the effect type
   * @param B the build type
   */
-trait Source[F[_], B] {
+abstract class Source[F[_], B] {
+
+  /** The variant type. */
+  type V
+
+  /* The variant of builds being produced by this source. */
+  def variant: V
+
+  /** The stream of builds specialized to the variant. */
+  def builds: Stream[F, B]
 
   /**
-    * The type used for specifying the "kind" of a build.
+    * Polls for builds forever, emitting `[[Poll]]` objects in a stream that
+    * represent a "deploy" (a change in the current build).
     *
-    * Suitable for indicating a branch, platform, etc. specific to the build
-    * being emitted.
-    */
-  type K
-
-  /** The stream of builds specialized to the kind.
+    * Build comparison is determined using the `cats.Order` type class. A
+    * `Right(poll)` object is emitted when a difference is detected. The
+    * `[[Poll]]` object encapsulates information about the current and previous
+    * build.
     *
-    * @param kind the kind of build
-    */
-  def builds(kind: K): Stream[F, B]
-
-  /**
-    * Scans builds forever, letting the caller tap into new builds as they
-    * are detected.
+    * When an error is thrown, a `Left(throwable)` is emitted; errors do not
+    * halt polling.
     *
-    * "New" builds are determined using the `Order` type class. If a build
-    * differs from the previous one (or there wasn't one at all), `onNewBuild`
-    * is invoked with a [[PollResult]]. This class encapsulates the new build
-    * and the build before it, allowing the caller to tap into additional
-    * context.
-    *
-    * Errors do not halt polling. `onError` is called with any caught exception
-    * that gets thrown, and the poller continues after the delay has passed.
-    *
-    * @param kind the kind of build to poll for
     * @param rate how long to sleep between pulls
-    * @param onNewBuild a callback invoked when a new build was detected
-    * @param onError a callback invoked when an error was thrown
     */
   def poll(
-      kind: K,
       rate: FiniteDuration,
-  )(
-      onNewBuild: PollResult[B] => F[Unit],
-      onError: Throwable => F[Unit],
   )(
       implicit F: Applicative[F],
       O: Order[B],
       T: Timer[F],
-  ): Stream[F, Nothing] = {
-    // Don't sleep before the first pull.
-    (Stream(0.seconds) ++ Stream.awakeDelay[F](rate))
-      .zipRight(builds(kind).attempt.repeat)
-      .evalScan(Map[K, B]()) {
-        case (acc, Left(error)) =>
-          F.as(onError(error), acc)
-        case (acc, Right(build)) =>
-          val prev = acc.get(kind)
-          if (prev.forall(O.neqv(_, build)))
-            F.as(onNewBuild(PollResult(build, prev)), acc.updated(kind, build))
-          else
-            F.pure(acc)
+  ): Stream[F, Either[Throwable, Poll[B]]] = {
+    import scala.collection.immutable.Queue
+
+    // Don't delay twice so that we can immediately emit None, then immediately
+    // try for the first build.
+    val delayStream: Stream[F, FiniteDuration] =
+      Stream(0.seconds).repeatN(2) ++ Stream.awakeDelay[F](rate)
+    val buildStream: Stream[F, Option[Either[Throwable, B]]] =
+      Stream(none[Either[Throwable, B]]) ++ builds.attempt.map(_.some).repeat
+    val delayedBuildStream = delayStream.zipRight(buildStream)
+
+    // Slide over the build stream as we want to emit both the current build
+    // and the build before that (for context).
+    delayedBuildStream
+      .sliding(2)
+      .collect {
+        // First successful scrape:
+        case Queue(None, Some(Right(current))) =>
+          Right(Poll(current, None))
+
+        // Two adjacent successful scrapes:
+        case Queue(Some(Right(previous)), Some(Right(current)))
+            if O.neqv(current, previous) =>
+          Right(Poll(current, previous.some))
+
+        // Some error happened:
+        case Queue(_, Some(Left(error))) =>
+          Left(error)
       }
-      .drain
   }
+
+  // This is needed by `Poller` to deduplicate sources when calculating the
+  // source to publisher mapping.
+  override def equals(that: Any): Boolean =
+    that match {
+      case that: Source[F, B] => that.variant == variant
+      case _                  => false
+    }
+}
+
+object Source {
+  implicit def eqSource[F[_], V, B]: Eq[Source[F, B]] =
+    Eq.fromUniversalEquals
 }

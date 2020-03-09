@@ -29,22 +29,19 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
       setting: PublisherSetting,
   )(implicit httpClient: Client[F]): Publisher[F] = setting match {
     case DiscordPublisherSetting(id, token, _) =>
-      new DiscordPublisher[F](Webhook(id, token), httpClient)
+      DiscordPublisher[F](Webhook(id, token), httpClient)
     case StdoutPublisherSetting(format, _) =>
-      new StdoutPublisher[F](format)
+      StdoutPublisher[F](format)
   }
 
   /** Publishes a [[discord.Deploy]] to a list of [[PublisherSetting]]s. */
-  def publish(deploy: Deploy, publisherSettings: List[PublisherSetting])(
-      implicit httpClient: Client[F],
-  ): F[Unit] = {
-    publisherSettings
-      .filter(_.branches.contains(deploy.build.branch))
-      .map(buildPublisher)
+  def publish(deploy: Deploy, publishers: Set[Publisher[F]]): F[Unit] = {
+    publishers
       .map(publisher =>
         L.info(s"Publishing fresh ${deploy.build.branch} build to $publisher")
           *> publisher.publish(deploy),
       )
+      .toVector
       .sequence
       .void
   }
@@ -54,50 +51,81 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
     * from it and publishing it to the configured publishers.
     */
   def pollTap(
-      result: PollResult[Build],
-  )(implicit httpClient: Client[F]): F[Unit] = {
-    val build = result.build
-    // Revert heuristics: simply check if the build number has gone down instead
-    // of up.
-    val isRevert = result.previous.exists(build.number < _.number)
-    val deploy   = Deploy(result.build, isRevert)
+      source: Source[F, Build],
+      publishers: Set[Publisher[F]],
+  )(either: Either[Throwable, Poll[Build]]): F[Unit] =
+    either match {
+      case Left(error) =>
+        L.error(error)(s"Failed to scrape from $source")
 
-    publish(deploy, config.publishers)
-      .handleErrorWith(L.error(_)(show"Failed to publish $build"))
-  }
+      case Right(result) =>
+        val build = result.build
+        // Revert heuristics: simply check if the build number has gone down instead
+        // of up.
+        val isRevert = result.previous.exists(build.number < _.number)
+        val deploy   = Deploy(result.build, isRevert)
 
-  def frontendPoller(
-      branches: Set[Branch],
-      source: FrontendSource[F],
-  )(implicit httpClient: Client[F]): F[Unit] = {
-    Stream
-      .emits(branches.toSeq)
-      .map(branch =>
-        source
-          .poll(branch, rate = config.interval)(
-            pollTap,
-            L.error(_)(show"Failed to scrape $branch"),
+        publish(deploy, publishers)
+          .handleErrorWith(L.error(_)(show"Failed to publish $build"))
+    }
+
+  def resolve(settings: List[PublisherSetting])(
+      implicit httpClient: Client[F],
+  ): Map[Source[F, Build], Set[Publisher[F]]] = {
+    def selectSource(selector: String): Set[Source[F, Build]] =
+      selector match {
+        case s"fe:$selector" =>
+          val branches = Selector.select[Branch](selector)
+          branches.variants.map(branch =>
+            FrontendSource[F](branch, httpClient),
           )
-          .drain,
-      )
-      .parJoinUnbounded
-      .compile
-      .drain
+      }
+
+    // Since each publisher specifies its "desired sources", let's reverse the
+    // mapping, creating a mapping from all desired sources to the publishers
+    // that care about builds from those sources.
+    //
+    // This means that publisher objects will be duplicated (in the nested map
+    // call), but it provides a more straightforward approach.
+    settings
+      .map({ setting =>
+        // Our first step is to resolve the publisher setting objects and
+        // selectors into publisher objects and source objects respectively.
+        buildPublisher(setting) -> setting.scrape.flatMap(selectSource),
+      })
+      .flatMap({
+        // If a publisher desires builds from more than one source, duplicate it
+        // for each source it wants. This is so we can group them by source.
+        case publisher -> sources => sources.map(source => publisher -> source)
+      })
+      .groupMap({
+        // Now that we have a flat mapping of publisher to source, we can group
+        // by source.
+        case _ -> source => source
+      })({
+        // The entries are grouped by source already, so let's just keep the
+        // publisher.
+        case publisher -> _ => publisher
+      })
+      // Convert the list of publishers to a set.
+      .view.mapValues(_.toSet).toMap
   }
 
   /** Polls and publishes builds from all branches forever. */
   def poller(implicit httpClient: Client[F]): F[Unit] = {
-    // Compute the branches that we have to scrape from. If all publishers are
-    // configured to only scrape from the Canary branch, then we can simply only
-    // scrape from that branch.
-    val specifiedBranches = config.publishers.flatMap(_.branches).toSet
-    val branches =
-      if (specifiedBranches.isEmpty) Branch.all else specifiedBranches
+    val sources = resolve(config.publishers)
 
-    val discordFrontendSource = new FrontendSource[F](httpClient)
+    val poll = Stream
+      .emits(sources.toList)
+      .map({
+        case source -> publishers =>
+          source.poll(config.interval).evalTap(pollTap(source, publishers) _)
+      })
+      .parJoinUnbounded
+      .compile
+      .drain
 
-    L.info(show"Scraping ${branches.size} branch(es): ${branches}") *>
-      frontendPoller(branches, discordFrontendSource)
+    L.info(s"Scraping ${sources.size} source(s): $sources") *> poll
   }
 
   /** Starts this poller and runs it forever. */

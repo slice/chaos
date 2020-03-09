@@ -19,15 +19,15 @@ import scala.util.matching._
   *
   * @param scraper the scraper
   */
-class FrontendSource[F[_]](val httpClient: Client[F])(
+case class FrontendSource[F[_]](val variant: Branch, val httpClient: Client[F])(
     implicit F: Sync[F],
 ) extends Source[F, Build] {
   import FrontendSource._
 
-  type K = Branch
+  type V = Branch
 
-  def builds(branch: Branch): Stream[F, Build] = {
-    Stream.repeatEval(scrape(branch))
+  def builds: Stream[F, Build] = {
+    Stream.repeatEval(scrape(variant))
   }
 
   protected implicit def unsafeLogger: Logger[F] =

@@ -17,7 +17,7 @@ import io.circe.literal._
 
 import java.time.Instant
 
-class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
+case class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
     extends Publisher[F]
     with Http4sClientDsl[F] {
 

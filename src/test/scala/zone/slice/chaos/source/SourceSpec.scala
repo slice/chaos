@@ -12,12 +12,11 @@ import scala.concurrent.duration._
 
 class SourceSpec extends ChaosSpec {
   trait SourceFixture {
-    val source = new Source[IO, String] {
-      type K = String
-
-      def builds(kind: K): Stream[IO, String] = {
+    case class FixedVariantSource(val variant: String) extends Source[IO, String] {
+      type V = String
+      def builds: Stream[IO, String] = {
         val ints = Stream.iterate(0)(_ + 1)
-        ints.map(version => s"$kind, $version")
+        ints.map(version => s"$variant, $version")
       }
     }
   }
@@ -28,41 +27,39 @@ class SourceSpec extends ChaosSpec {
     implicit val timer = ctx.ioTimer
 
     // A mocked tapper function to use with #poll and #parPoll.
-    val tapper = mock[PollResult[String] => IO[Unit]]
+    val tapper = mock[Either[Throwable, Poll[String]] => IO[Unit]]
     // tapper(*) answers ((thing: String) => IO(println(s"[tapper] $thing")))
     tapper(*) returns IO.unit
 
     /**
-      * Shortcut function to check if a `PollResult` was tapped.
+      * Shortcut function to check if a `Poll` was tapped.
       *
       * This really only works for unique, one-time taps since we check if the
       * tapper function was called once.
       */
     def wasTapped(build: String, previous: Option[String]): Unit =
-      tapper(PollResult(build, previous)) wasCalled once
+      tapper(Right(Poll(build, previous))) wasCalled once
   }
 
   "source" - {
     "emits builds" in new SourceFixture {
-      val builds = source.builds("cat").take(5).compile.toVector.unsafeRunSync()
-      all(builds) should fullyMatch regex "cat, \\d+"
+      val builds = FixedVariantSource("cat").builds.take(3).compile.toVector.unsafeRunSync()
+      builds shouldBe Vector("cat, 0", "cat, 1", "cat, 2")
     }
 
     "polls" in new SourcePollFixture {
-      val cancel = source
-        .poll("cat", 1.second)(tapper, _ => IO.unit)
+      val cancel = FixedVariantSource("cat")
+        .poll(1.second)
+        .evalTap(tapper)
         .compile
         .drain
         .unsafeRunCancelable(_ => ())
 
-      // The initial pull should've been tapped by now.
       wasTapped("cat, 0", none)
 
-      // After a second, the post-delay pull should've happened.
       ctx.tick(1.second)
       wasTapped("cat, 1", "cat, 0".some)
 
-      // After another second, another post-delay pull should've happened.
       ctx.tick(1.second)
       wasTapped("cat, 2", "cat, 1".some)
 
@@ -71,21 +68,24 @@ class SourceSpec extends ChaosSpec {
 
     "parallel polls" in new SourcePollFixture {
       val cancel = Stream("cat", "dog")
-        .map(source.poll(_, 10.millis)(tapper, _ => IO.unit))
+        .map(variant => FixedVariantSource(variant))
+        .map(_.poll(10.millis))
         .parJoinUnbounded
+        .evalTap(tapper)
         .compile
         .drain
         .unsafeRunCancelable(_ => ())
 
       // Stream#parJoin takes a bit of time to start emitting stuff.
+      // A bit ugly, but parJoin is nondeterministic, unfortunately.
       Thread.sleep(500L)
       wasTapped("cat, 0", none)
       wasTapped("dog, 0", none)
 
       ctx.tick(10.millis)
       Thread.sleep(500L) // Ditto.
-      // We can't check the actual arguments because the order isn't
-      // deterministic.
+
+      // We can't check the actual arguments because of the nondeterminism.
       tapper(*) wasCalled 4.times
 
       cancel.unsafeRunSync()
@@ -95,23 +95,21 @@ class SourceSpec extends ChaosSpec {
       val error = new Exception("oops, dropped something")
 
       val failingSource = new Source[IO, String] {
-        type K = String
-
-        def builds(kind: String): Stream[IO, String] =
-          Stream(kind) ++ Stream.raiseError[IO](error)
+        type V = String
+        def variant: String = "cat"
+        def builds: Stream[IO, String] =
+          Stream(variant) ++ Stream.raiseError[IO](error)
       }
 
-      val errorHandler = mock[Throwable => IO[Unit]]
-      errorHandler(*) returns IO.unit
-
       val cancel = failingSource
-        .poll("cat", 10.millis)(tapper, errorHandler)
+        .poll(10.millis)
+        .evalTap(tapper)
         .compile
         .drain
         .unsafeRunCancelable(_ => ())
 
       ctx.tick(10.millis)
-      errorHandler(error) wasCalled once
+      tapper(Left(error)) wasCalled once
 
       cancel.unsafeRunSync()
     }

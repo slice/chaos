@@ -6,6 +6,7 @@ import discord._
 import Branch._
 import poller._
 import source._
+import source.discord._
 
 import io.chrisdavenport.log4cats.testing.TestingLogger
 import cats.implicits._
@@ -15,11 +16,15 @@ import scala.concurrent.duration._
 
 class PollerSpec extends ChaosSpec {
   trait PollerFixture extends LoggingFixture with OkHttpClientFixture {
-    val publisher =
-      StdoutPublisherSetting("[test] $branch $build_number", Set(Canary))
-    val config      = Config(interval = 1.second, publishers = List(publisher))
+    private val formatString = "new $branch; $build_number"
+    val publisher            = new StdoutPublisher[IO](formatString)
+    val publisherSetting =
+      StdoutPublisherSetting(formatString, Set("fe:canary"))
+    val config =
+      Config(interval = 1.second, publishers = List(publisherSetting))
     val poller      = new Poller[IO](config)
     val spiedPoller = spy(poller)
+    val fakeSource  = mock[Source[IO, Build]]
   }
 
   def makeBuild(number: Int): Build =
@@ -32,16 +37,22 @@ class PollerSpec extends ChaosSpec {
       val current  = makeBuild(100)
       val previous = makeBuild(50)
 
-      spiedPoller.pollTap(PollResult(current, previous.some)).unsafeRunSync()
-      spiedPoller.publish(Deploy(current, isRevert = false), List(publisher)) wasCalled once
+      spiedPoller
+        .pollTap(fakeSource, Set(publisher))(
+          Right(Poll(current, previous.some)),
+        )
+        .unsafeRunSync()
+      spiedPoller.publish(Deploy(current, isRevert = false), Set(publisher)) wasCalled once
     }
 
     "detects reverts" in new PollerFixture {
       val current = makeBuild(1)
 
       forAll(Seq(makeBuild(100).some, none)) { previous =>
-        spiedPoller.pollTap(PollResult(current, previous)).unsafeRunSync()
-        spiedPoller.publish(Deploy(current, isRevert = true), List(publisher)) wasCalled once
+        spiedPoller
+          .pollTap(fakeSource, Set(publisher))(Right(Poll(current, previous)))
+          .unsafeRunSync()
+        spiedPoller.publish(Deploy(current, isRevert = true), Set(publisher)) wasCalled once
       }
     }
 
@@ -50,7 +61,7 @@ class PollerSpec extends ChaosSpec {
     // "logs polling errors" in new PollerFixture {
     //   val exception = new Exception("i'm green da ba dee")
 
-    //   val source = mock[DiscordFrontendSource[IO]]
+    //   val source = mock[FrontendSource[IO]]
     //   import fs2.Stream
     //   Stream.raiseError[IO](exception) willBe returned by source.poll(*, *)(*)
 
@@ -70,11 +81,13 @@ class PollerSpec extends ChaosSpec {
       val deploy    = Deploy(build, isRevert = false)
 
       // Force Poller#publish to raise an error.
-      spiedPoller.publish(deploy, List(publisher)) returns IO.raiseError(
+      spiedPoller.publish(deploy, Set(publisher)) returns IO.raiseError(
         exception,
       )
 
-      spiedPoller.pollTap(PollResult(build, none)).unsafeRunSync()
+      spiedPoller
+        .pollTap(fakeSource, Set(publisher))(Right(Poll(build, none)))
+        .unsafeRunSync()
 
       val message =
         TestingLogger.ERROR(show"Failed to publish $build", Some(exception))
@@ -84,23 +97,30 @@ class PollerSpec extends ChaosSpec {
     "publishes" in new PollerFixture {
       val deploy = makeDeploy(100)
 
-      val fakePublisherSetting = mock[PublisherSetting]
-      fakePublisherSetting.branches returns Set(Canary)
       val fakePublisher = mock[Publisher[IO]]
       fakePublisher.publish(deploy) returns IO.unit
 
-      // Make Poller#buildPublisher return fakePublisher when given
-      // fakePublisherSetting.
-      //
-      // NOTE: using willBe to stub here because actually calling it would throw.
-      fakePublisher willBe returned by spiedPoller.buildPublisher(
-        fakePublisherSetting,
-      )
-
       spiedPoller
-        .publish(deploy, List(fakePublisherSetting))
+        .publish(deploy, Set(fakePublisher))
         .unsafeRunSync()
+
       fakePublisher.publish(deploy) wasCalled once
+    }
+
+    "resolves" in new PollerFixture {
+      implicit val fakeClient = mock[org.http4s.client.Client[IO]]
+
+      val stdoutSetting = StdoutPublisherSetting("aah", Set("fe:*"))
+      val discordSetting = DiscordPublisherSetting(0, "", Set("fe:canary"))
+      val stdoutPublisher = spiedPoller.buildPublisher(stdoutSetting)
+      val discordPublisher = spiedPoller.buildPublisher(discordSetting)
+      val settings = List(stdoutSetting, discordSetting)
+
+      spiedPoller.resolve(settings).toSet shouldBe Map(
+        FrontendSource(Canary, fakeClient) -> Set(stdoutPublisher, discordPublisher),
+        FrontendSource(PTB, fakeClient) -> Set(stdoutPublisher),
+        FrontendSource(Stable, fakeClient) -> Set(stdoutPublisher)
+      ).toSet
     }
   }
 }

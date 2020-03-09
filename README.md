@@ -2,8 +2,8 @@
 
 ![Testing status badge](https://github.com/slice/chaos/workflows/tests/badge.svg)
 
-chaos is a purely functional Discord build scraper written in [Scala]. It uses
-[cats], [cats-effect], [fs2], and [http4s].
+chaos is a purely functional Discord build scraper written in [Scala]. It
+leverages [cats], [cats-effect], [fs2], and [http4s].
 
 [cats]: https://typelevel.org/cats
 [cats-effect]: https://typelevel.org/cats-effect
@@ -31,15 +31,12 @@ $ sbt assembly
 This will take about a minute to compile the source code and assemble a
 self-contained JAR file with all bytecode and dependencies.
 
-## Usage
+## Operation
 
-chaos works by repeatedly fetching the Discord frontend at a user-specified
-interval and extracting metadata from the frontend HTML and scripts. This
-metadata can then be published to various consumers (called "publishers"), e.g.
-`stdout` or a Discord webhook.
-
-All logs are sent to `stderr`, so feel free to pipe `stdout` to anywhere you'd
-like when using the `stdout` publisher.
+chaos works by repeatedly fetching _builds_ from _sources_ at a user-specified
+interval, extracting _metadata_ from those builds, and publishing them to
+various _publishers_. Examples of publishers include standard output (`stdout`)
+or a Discord webhook (`discord`).
 
 ## Configuration
 
@@ -53,31 +50,68 @@ interval: 5 minutes
 
 publishers: [
   # Let's add a `discord` publisher to publish new builds to a Discord webhook.
+  #
+  # Build metadata is contained within a color-coded embed with the data laid
+  # out nicely.
   {
     type: "discord"
+
+    # The webhook ID and token can be extracted from the URL that you get from
+    # the client:
     id: "676263368713306135"
     token: "M6Reo4r2AUJjtIImz-H_pnZlKDS_Q5DNNc_9qRCnYM7jTP9dgoc1-qg7YXIe9JbNvzOL"
 
-    # Only publish new Canary builds to this publisher.
-    # Supported values: "stable", "ptb", "canary"
-    branches: ["canary"]
+    # Only publish new Canary builds to this publisher:
+    scrape: ["fe:canary"]
   },
 
-  # Let's also output all new builds to `stdout` for good measure:
+  # Let's also output _all_ new frontend builds to `stdout` for good measure:
   {
     type: "stdout"
     format: "o/ Detected a new build for $branch! (build number: $build_number)"
+
+    # For this publisher, we care about all frontend branches:
+    scrape: ["fe:*"]
   }
 ]
 ```
 
-chaos will only scrape from the branches that you specify in each publisher. By
-default, a publisher will publish from all branches. The above configuration
-will scrape from all branches because the `stdout` publisher uses the
-aforementioned default value, therefore prompting chaos to scrape from all
-branches. If it had `branches: ["canary"]` like the `discord` publisher before
-it, then only the Canary branch would ever be polled from, since all publishers
-only care about Canary builds.
+### Selectors
+
+You can select which sources to poll from using _selectors_ specified in the
+`scrape` keys of your publishers. chaos will parse these selectors and compute
+the sources to poll from, only polling builds from the necessary sources.
+
+Syntactically, selectors are composed of a source name and variant name,
+separated by a colon with no spaces.
+
+For example, the above configuration would scrape from all frontend branches
+because `fe:*` was selected in the `stdout` publisher. Because `fe:*` is a
+superset of `fe:canary`, all frontend branches would be scraped. If the `stdout`
+publisher was omitted, then only the Canary frontend would be scraped.
+
+In the selector `fe:canary`, `fe` refers to the _build source_ (or simply
+_source_) while `canary` refers to the _variant_ associated with that source.
+The `fe` source has all of the frontend branches as variants: `canary`, `ptb`,
+and `stable`.
+
+#### Selector wildcards
+
+You can select all possible variants for a source by using the `*` wildcard, as
+in `fe:*`.
+
+#### Multiple selectors
+
+You can also specify more than one variant for a source by using curly braces,
+as in `fe:{canary,stable}`.
+
+#### Examples
+
+- `fe:canary`: Scrapes Canary frontend
+- `fe:{canary,stable}`: Scrapes both Stable and Canary frontend
+- `fe:*`: Scrapes all frontend branches (equivalent to `fe:{canary,ptb,stable}`)
+
+## Running
 
 Now, run chaos with `java`:
 
@@ -90,7 +124,7 @@ detected.
 
 ### systemd
 
-Since chaos runs forever, it would appropriate to have it live in a systemd
+Since chaos runs forever, it would be appropriate to have it live in a systemd
 unit:
 
 ```ini
@@ -116,6 +150,8 @@ Ensure that the path to the JAR file is correct before enabling the unit:
 $ sudo mv chaos.service /etc/systemd/system/
 $ sudo systemctl enable --now chaos.service
 ```
+
+---
 
 ## Publishers
 
@@ -156,7 +192,35 @@ Prints new builds to `stdout` through a format string. Available variables:
 | `$asset_filename_list` | A list of all build asset filenames, separated by `,`.            |
 | `$is_revert`           | A boolean (`true` or `false`) indicating if this build isn't new. |
 
-## Internals
+All logs are sent to `stderr`, so feel free to pipe `stdout` to anywhere you'd
+like when using the `stdout` publisher.
+
+## Sources
+
+Sources (and their variants) are selected through selectors. See
+[the section on selectors](#selectors) for more information.
+
+### `fe`
+
+`fe` (short for "frontend") refers to the online client (accessible at
+https://discordapp.com/channels/@me). Keep in mind that the desktop app acts as
+a not-so-thin wrapper around the online client, enabling additional features
+such as push-to-talk.
+
+Metadata is extracted via crude regex matching of the script and style tags. The
+build number and version hash is extracted from the entrypoint script.
+
+Variants, in order from least stable to most stable:
+
+- `canary`, `c`: Canary
+  - Bleeding edge builds; deployed to most often.
+  - Usually has the latest features, but can be broken sometimes.
+- `ptb`, `p`: PTB (Public Test Build)
+  - "Beta" builds. Usually stable enough.
+- `stable`, `s`: Stable
+  - The primary branch that the majority of users are on; deployed to the least.
+
+## Heuristics
 
 ### Revert detection
 
@@ -164,3 +228,39 @@ Reverts are detected by checking if the build number has decreased instead of
 increased. For example, if build 25000 was deployed after build 26000, that
 would be detected as a revert. We assume that a lower build number means that
 the build is older and was previously deployed.
+
+## Jargon
+
+### "build"
+
+An instance of deployed code, typically with an associated build number and
+metadata. It is produced by a source according to the variant.
+
+### "metadata"
+
+The information associated with a build, e.g. the build number, hash, and any
+relevant assets.
+
+### "build source", "source"
+
+Something from which builds can be scraped from. Has variants that may be
+selected. [See the list of all sources.](#sources)
+
+### "selector"
+
+A string that specifies a source alongside any desired variants.
+[See the help section on selectors.](#selectors)
+
+For example, `fe:canary` is a selector that selects the `canary` variant from
+the `fe` source.
+
+### "variant"
+
+A variant associated with a source. The name refers to how a source can be
+specialized to emit builds of certain variants. For example, the frontend source
+(`fe`) has a variant for each branch: `canary`, `ptb`, and `stable`.
+
+### "publisher"
+
+An arbitrary "endpoint" to which builds may be published to.
+[See the list of all publishers.](#publishers)

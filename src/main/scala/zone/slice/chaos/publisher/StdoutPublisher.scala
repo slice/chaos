@@ -5,7 +5,7 @@ import discord.Deploy
 
 import cats.effect.Sync
 
-class StdoutPublisher[F[_]: Sync](format: String) extends Publisher[F] {
+case class StdoutPublisher[F[_]: Sync](format: String) extends Publisher[F] {
 
   val replacers: Deploy => Map[String, String] = (deploy: Deploy) => {
     val build = deploy.build
