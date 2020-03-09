@@ -1,6 +1,6 @@
 # chaos
 
-![Testing status badge](https://github.com/slice/chaos/workflows/tests/badge.svg)
+[![Build Status](https://github.com/slice/chaos/workflows/tests/badge.svg)](https://github.com/slice/chaos/actions?query=workflow%3Atests)
 
 chaos is a purely functional Discord build scraper written in [Scala]. It
 leverages [cats], [cats-effect], [fs2], and [http4s].
