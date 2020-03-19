@@ -1,6 +1,8 @@
 package zone.slice.chaos
 package discord
 
+import Asset._
+
 import cats.Show
 import cats.implicits._
 import org.http4s.Uri
@@ -33,4 +35,22 @@ object Asset {
 
   implicit val showBuild: Show[Asset] = (asset: Asset) =>
     show"${asset.name}.${asset.extension}"
+}
+
+/** A bundle of [[Asset.Script]]s and [[Asset.Stylesheet]]s for a [[Build]]. */
+case class AssetBundle(
+    scripts: Vector[Script],
+    stylesheets: Vector[Stylesheet],
+) {
+
+  /** A vector of all [[Asset]]s contained within this [[AssetBundle]]. */
+  def all: Vector[Asset] = scripts ++ stylesheets
+}
+
+object AssetBundle {
+  implicit val showAssetBundle: Show[AssetBundle] =
+    Show.fromToString[AssetBundle]
+
+  /** An empty asset bundle. */
+  def empty: AssetBundle = AssetBundle(Vector.empty, Vector.empty)
 }
