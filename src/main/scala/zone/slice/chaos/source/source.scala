@@ -62,6 +62,7 @@ abstract class Source[F[_], B] {
     */
   def poll(
       rate: FiniteDuration,
+      initial: Option[B] = none,
   )(
       implicit F: Applicative[F],
       O: Order[B],
@@ -69,12 +70,17 @@ abstract class Source[F[_], B] {
   ): Stream[F, Either[Throwable, Poll[B]]] = {
     import scala.collection.immutable.Queue
 
-    // Don't delay twice so that we can immediately emit None, then immediately
-    // try for the first build.
+    val initialBuild: Option[Either[Throwable, B]] =
+      initial.map(build => Right(build))
+
+    // Skip delaying two times:
+    //
+    // 1. To immediately emit the initial build (by default, None).
+    // 2. To immediately try to fetch the next build.
     val delayStream: Stream[F, FiniteDuration] =
-      Stream(0.seconds).repeatN(2) ++ Stream.awakeDelay[F](rate)
+      Stream(0.seconds) ++ Stream(0.seconds) ++ Stream.awakeDelay[F](rate)
     val buildStream: Stream[F, Option[Either[Throwable, B]]] =
-      Stream(none[Either[Throwable, B]]) ++ builds.attempt.map(_.some).repeat
+      Stream(initialBuild) ++ builds.attempt.map(_.some).repeat
     val delayedBuildStream = delayStream.zipRight(buildStream)
 
     // Slide over the build stream as we want to emit both the current build

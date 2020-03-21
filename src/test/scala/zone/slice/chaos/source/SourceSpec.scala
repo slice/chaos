@@ -66,6 +66,22 @@ class SourceSpec extends ChaosSpec {
       cancel.unsafeRunSync()
     }
 
+    "polls with a initial" in new SourcePollFixture {
+      val cancel = FixedVariantSource("cat")
+        .poll(1.second, "initial cat".some)
+        .evalTap(tapper)
+        .compile
+        .drain
+        .unsafeRunCancelable(_ => ())
+
+      wasTapped("cat, 0", "initial cat".some)
+
+      ctx.tick(1.second)
+      wasTapped("cat, 1", "cat, 0".some)
+
+      cancel.unsafeRunSync()
+    }
+
     "parallel polls" in new SourcePollFixture {
       val cancel = Stream("cat", "dog")
         .map(variant => FixedVariantSource(variant))
