@@ -24,7 +24,11 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
   protected val executionContext: ExecutionContext =
     ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
 
-  /** Builds a [[publisher.Publisher]] from a [[PublisherSetting]]. */
+  /** Creates a [[Publisher]] from a [[PublisherSetting]].
+    *
+    * A [[PublisherSetting]] merely acts as a thin "configuration" object for
+    * an actual [[Publisher]].
+    */
   private[chaos] def buildPublisher(
       setting: PublisherSetting,
   )(implicit httpClient: Client[F]): Publisher[F] = setting match {
@@ -34,7 +38,7 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
       StdoutPublisher[F](format)
   }
 
-  /** Publishes a [[discord.Deploy]] to a list of [[PublisherSetting]]s. */
+  /** Publishes a [[Deploy]] to a set of [[Publisher]]s. */
   def publish(deploy: Deploy, publishers: Set[Publisher[F]]): F[Unit] = {
     publishers
       .map(publisher =>
@@ -46,9 +50,8 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
       .void
   }
 
-  /**
-    * Processes a [[discord.Build]] from a poll, creating a [[discord.Deploy]]
-    * from it and publishing it to the configured publishers.
+  /** Processes an `Either[Throwable, Poll[Build]]` from the polling stream of
+    * a [[Source]], publishing it to a set of [[Publisher]]s if necessary.
     */
   def pollTap(
       source: Source[F, Build],
@@ -69,6 +72,15 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
           .handleErrorWith(L.error(_)(show"Failed to publish $build"))
     }
 
+  /** Resolves a list of [[PublisherSetting]]s into a mapping between
+    * [[Source]]s and a set of [[Publisher]]s interested in those sources.
+    *
+    * Since each publisher setting specifies which sources it's interested in
+    * through the source selector, we are able to derive a mapping between all
+    * publishers and the sources that they will receive builds from. This means
+    * that if more than one publisher is interested in a specific source, then
+    * those source objects will be duplicated.
+    */
   def resolve(settings: List[PublisherSetting])(
       implicit httpClient: Client[F],
   ): Map[Source[F, Build], Set[Publisher[F]]] = {
