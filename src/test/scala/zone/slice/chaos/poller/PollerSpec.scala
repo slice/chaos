@@ -110,16 +110,19 @@ class PollerSpec extends ChaosSpec {
     "resolves" in new PollerFixture {
       implicit val fakeClient = mock[org.http4s.client.Client[IO]]
 
-      val stdoutSetting = StdoutPublisherSetting("aah", Set("fe:*"))
-      val discordSetting = DiscordPublisherSetting(0, "", Set("fe:canary"))
-      val stdoutPublisher = spiedPoller.buildPublisher(stdoutSetting)
+      val stdoutSetting    = StdoutPublisherSetting("aah", Set("fe:*"))
+      val discordSetting   = DiscordPublisherSetting(0, "", Set("fe:canary"))
+      val stdoutPublisher  = spiedPoller.buildPublisher(stdoutSetting)
       val discordPublisher = spiedPoller.buildPublisher(discordSetting)
-      val settings = List(stdoutSetting, discordSetting)
+      val settings         = List(stdoutSetting, discordSetting)
 
       spiedPoller.resolve(settings).toSet shouldBe Map(
-        FrontendSource(Canary, fakeClient) -> Set(stdoutPublisher, discordPublisher),
-        FrontendSource(PTB, fakeClient) -> Set(stdoutPublisher),
-        FrontendSource(Stable, fakeClient) -> Set(stdoutPublisher)
+        FrontendSource(Canary, fakeClient) -> Set(
+          stdoutPublisher,
+          discordPublisher,
+        ),
+        FrontendSource(PTB, fakeClient)    -> Set(stdoutPublisher),
+        FrontendSource(Stable, fakeClient) -> Set(stdoutPublisher),
       ).toSet
     }
   }

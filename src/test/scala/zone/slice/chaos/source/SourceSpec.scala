@@ -12,7 +12,8 @@ import scala.concurrent.duration._
 
 class SourceSpec extends ChaosSpec {
   trait SourceFixture {
-    case class FixedVariantSource(val variant: String) extends Source[IO, String] {
+    case class FixedVariantSource(val variant: String)
+        extends Source[IO, String] {
       type V = String
       def builds: Stream[IO, String] = {
         val ints = Stream.iterate(0)(_ + 1)
@@ -43,7 +44,11 @@ class SourceSpec extends ChaosSpec {
 
   "source" - {
     "emits builds" in new SourceFixture {
-      val builds = FixedVariantSource("cat").builds.take(3).compile.toVector.unsafeRunSync()
+      val builds = FixedVariantSource("cat").builds
+        .take(3)
+        .compile
+        .toVector
+        .unsafeRunSync()
       builds shouldBe Vector("cat, 0", "cat, 1", "cat, 2")
     }
 

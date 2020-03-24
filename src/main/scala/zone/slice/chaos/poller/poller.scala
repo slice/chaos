@@ -88,9 +88,7 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
       selector match {
         case s"fe:$selector" =>
           val branches = Selector.select[Branch](selector)
-          branches.variants.map(branch =>
-            FrontendSource[F](branch, httpClient),
-          )
+          branches.variants.map(branch => FrontendSource[F](branch, httpClient))
       }
 
     // Since each publisher specifies its "desired sources", let's reverse the
@@ -120,7 +118,9 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
         case publisher -> _ => publisher
       })
       // Convert the list of publishers to a set.
-      .view.mapValues(_.toSet).toMap
+      .view
+      .mapValues(_.toSet)
+      .toMap
   }
 
   /** Polls and publishes builds from all branches forever. */
@@ -144,8 +144,7 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
   def runForever: F[Unit] =
     L.info(show"Starting poller (interval: ${config.interval})") *>
       BlazeClientBuilder[F](executionContext).resource.use {
-        implicit httpClient =>
-          poller
+        implicit httpClient => poller
       }
 }
 
