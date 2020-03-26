@@ -123,12 +123,13 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
       .toMap
   }
 
-  /** Polls and publishes builds from all branches forever. */
+  /** Polls and publishes builds from all sources forever. */
   def poller(implicit httpClient: Client[F]): F[Unit] = {
-    val sources = resolve(config.publishers)
+    // Derive the source to publisher mapping.
+    val mapping = resolve(config.publishers)
 
     val poll = Stream
-      .emits(sources.toList)
+      .emits(mapping.toList)
       .map({
         case source -> publishers =>
           source.poll(config.interval).evalTap(pollTap(source, publishers) _)
@@ -137,7 +138,7 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
       .compile
       .drain
 
-    L.info(s"Scraping ${sources.size} source(s): $sources") *> poll
+    L.info(s"Scraping ${mapping.size} source(s): $mapping") *> poll
   }
 
   /** Starts this poller and runs it forever. */
