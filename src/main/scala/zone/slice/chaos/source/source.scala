@@ -113,6 +113,6 @@ abstract class Source[F[_], B] {
 }
 
 object Source {
-  implicit def eqSource[F[_], V, B]: Eq[Source[F, B]] =
+  implicit def eqSource[F[_], B]: Eq[Source[F, B]] =
     Eq.fromUniversalEquals
 }
