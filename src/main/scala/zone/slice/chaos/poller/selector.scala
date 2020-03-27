@@ -3,51 +3,73 @@ package poller
 
 import discord.Branch
 
-/**
-  * A type class for selecting things from a set according to a string.
+/** An item that was selected, alongside a normalized selector to select it. */
+case class Selected[A](item: A, normalizedSelector: String)
+
+/** A type class for selecting keyed items from a map using a selector string.
+  *
+  * A map is used instead of a set because it allows for more straightforward
+  * selecting when a direct key is specified, and it allows keys to be
+  * reverse-selected (e.g. when doing `multiselect("*")`).
+  *
+  * The `multiselect` is the most useful method that you get out of this type
+  * class. It lets you select multiple items from a selector string, which is
+  * really just a string that refers to (possibly multiple) key(s), including
+  * the multiselection syntax (`"{first,second,third,...}"`) and the star glob
+  * syntax (`"*"`).
   */
 trait Select[A] {
-  def all: Set[A]
-  def select(selector: String): A
+
+  /** A map of keyed items. */
+  def all: Map[String, A]
+
+  /** An additional map of key aliases. */
+  def aliases: Map[String, String] = Map[String, String]()
+
+  /* Selects an item directly from its key, also falling back to aliases. */
+  def select(key: String): Option[Selected[A]] =
+    all
+      .get(key)
+      .orElse(aliases.get(key).flatMap(all.get))
+      .map(Selected(_, key))
+
+  /** Selects a set of items from a selector string, allowing for
+    * multiselection syntax and star globbing.
+    */
+  def multiselect(selector: String): Set[Selected[A]] = selector match {
+    // {first,second,third,...}
+    case _ if selector.startsWith("{") && selector.endsWith("}") =>
+      selector
+        .substring(1, selector.length - 1)
+        .split(',')
+        .toSet
+        .flatMap(select)
+    case "*" =>
+      all
+        .map({
+          case (normalizedSelector, item) =>
+            Selected(item, normalizedSelector)
+        })
+        .toSet
+    case _ =>
+      select(selector).toSet
+  }
 }
 
 object Select {
   def apply[A](implicit ev: Select[A]): Select[A] = ev
 
-  def instance[A](all0: Set[A])(select0: String => A): Select[A] =
-    new Select[A] {
-      val all                         = all0
-      def select(selector: String): A = select0(selector)
-    }
+  implicit val selectBranch: Select[Branch] = new Select[Branch] {
+    def all: Map[String, Branch] = Map(
+      "stable" -> Branch.Stable,
+      "ptb"    -> Branch.PTB,
+      "canary" -> Branch.Canary,
+    )
 
-  implicit val selectBranch: Select[Branch] =
-    Select.instance(Branch.all) {
-      case "stable" | "s" => Branch.Stable
-      case "ptb" | "p"    => Branch.PTB
-      case "canary" | "c" => Branch.Canary
-    }
-}
-
-case class Selector[V](variants: Set[V])
-
-object Selector {
-  val selectorSetRegex = """\{\w+(,\w+)*\}""".r
-
-  def select[A](selector: String)(implicit ev: Select[A]): Selector[A] = {
-    def go(portion: String): Set[A] =
-      portion match {
-        case selectorSetRegex(_*) =>
-          portion
-            .substring(1, portion.length - 1)
-            .split(',')
-            .to(Set)
-            .flatMap(go)
-        case "*" =>
-          ev.all
-        case _ =>
-          Set(ev.select(portion))
-      }
-
-    Selector(go(selector))
+    override def aliases: Map[String, String] = Map(
+      "s" -> "stable",
+      "p" -> "ptb",
+      "c" -> "canary",
+    )
   }
 }

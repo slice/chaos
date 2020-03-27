@@ -12,6 +12,7 @@ import io.chrisdavenport.log4cats.testing.TestingLogger
 import cats.implicits._
 import cats.effect._
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 class PollerSpec extends ChaosSpec {
@@ -22,7 +23,8 @@ class PollerSpec extends ChaosSpec {
       StdoutPublisherSetting(formatString, Set("fe:canary"))
     val config =
       Config(interval = 1.second, publishers = List(publisherSetting))
-    val poller      = new Poller[IO](config)
+    val blocker     = Blocker.liftExecutionContext(ExecutionContext.global)
+    val poller      = new Poller[IO](config, blocker)
     val spiedPoller = spy(poller)
     val fakeSource  = mock[Source[IO, Build]]
   }
@@ -117,12 +119,16 @@ class PollerSpec extends ChaosSpec {
       val settings         = List(stdoutSetting, discordSetting)
 
       spiedPoller.resolve(settings).toSet shouldBe Map(
-        FrontendSource(Canary, fakeClient) -> Set(
+        SelectedSource("fe:canary", FrontendSource(Canary, fakeClient)) -> Set(
           stdoutPublisher,
           discordPublisher,
         ),
-        FrontendSource(PTB, fakeClient)    -> Set(stdoutPublisher),
-        FrontendSource(Stable, fakeClient) -> Set(stdoutPublisher),
+        SelectedSource("fe:ptb", FrontendSource(PTB, fakeClient)) -> Set(
+          stdoutPublisher,
+        ),
+        SelectedSource("fe:stable", FrontendSource(Stable, fakeClient)) -> Set(
+          stdoutPublisher,
+        ),
       ).toSet
     }
   }

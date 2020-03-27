@@ -1,3 +1,4 @@
+*.chaos
 /application.*
 
 target

@@ -15,7 +15,7 @@ sealed trait PublisherSetting {
 
 object PublisherSetting {
   implicit val circeConfiguration: Configuration =
-    Configuration.default.withDefaults
+    Configuration.default.withDefaults.withSnakeCaseMemberNames
 
   implicit val decodePublisherSetting: Decoder[PublisherSetting] =
     Decoder.instance { cursor =>
@@ -37,4 +37,8 @@ final case class DiscordPublisherSetting(
 ) extends PublisherSetting
 
 /** A configuration for a [[Poller]]. */
-case class Config(interval: FiniteDuration, publishers: List[PublisherSetting])
+case class Config(
+    interval: FiniteDuration,
+    publishers: List[PublisherSetting],
+    stateFilePath: String = "./state.chaos",
+)

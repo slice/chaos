@@ -116,3 +116,11 @@ object Source {
   implicit def eqSource[F[_], B]: Eq[Source[F, B]] =
     Eq.fromUniversalEquals
 }
+
+/** A case class containing both a selector string and the selected source.
+  *
+  * No actual relationship is maintained between these two values; they are
+  * only together in a case class. This is useful when you need to persist the
+  * selector string alongside the source.
+  */
+case class SelectedSource[F[_], B](selector: String, source: Source[F, B])

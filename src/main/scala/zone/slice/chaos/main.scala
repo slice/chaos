@@ -17,7 +17,7 @@ object Main extends IOApp {
     Slf4jLogger.getLogger[F]
 
   implicit val circeConfiguration: Configuration =
-    Configuration.default.withDefaults
+    Configuration.default.withDefaults.withSnakeCaseMemberNames
 
   def eput[F[_]: Sync](message: String): F[Unit] =
     Sync[F].delay(Console.err.println(message))
@@ -30,7 +30,7 @@ object Main extends IOApp {
         eput(s"Failed to load config file: $error")
     }
 
-  def program[F[_]: ConcurrentEffect: Timer]: F[ExitCode] =
+  def program[F[_]: ConcurrentEffect: Timer: ContextShift]: F[ExitCode] =
     parser
       .decodeF[F, Config]()
       .attemptT

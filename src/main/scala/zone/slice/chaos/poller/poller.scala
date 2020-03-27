@@ -6,6 +6,7 @@ import publisher._
 import source._
 import source.discord._
 
+import java.nio.file._
 import java.util.concurrent.Executors
 
 import cats.effect._
@@ -17,7 +18,10 @@ import org.http4s.client.blaze.BlazeClientBuilder
 
 import scala.concurrent.ExecutionContext
 
-class Poller[F[_]: Timer] private[chaos] (config: Config)(
+class Poller[F[_]: Timer: ContextShift] private[chaos] (
+    config: Config,
+    blocker: Blocker,
+)(
     implicit F: ConcurrentEffect[F],
     L: Logger[F],
 ) {
@@ -83,13 +87,26 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
     */
   def resolve(settings: List[PublisherSetting])(
       implicit httpClient: Client[F],
-  ): Map[Source[F, Build], Set[Publisher[F]]] = {
-    def selectSource(selector: String): Set[Source[F, Build]] =
+  ): Map[SelectedSource[F, Build], Set[Publisher[F]]] = {
+
+    /** Selects some sources from a selector string.
+      *
+      * The sources are returned inside of [[SelectedSource]] objects, so you
+      * are able to refer back to the original selector string.
+      */
+    def selectSource(selector: String): Set[SelectedSource[F, Build]] = {
       selector match {
         case s"fe:$selector" =>
-          val branches = Selector.select[Branch](selector)
-          branches.variants.map(branch => FrontendSource[F](branch, httpClient))
+          val selected = Select[Branch].multiselect(selector)
+          selected.map({
+            case Selected(branch, normalizedSelector) =>
+              SelectedSource(
+                s"fe:$normalizedSelector",
+                FrontendSource[F](branch, httpClient),
+              )
+          })
       }
+    }
 
     // Since each publisher specifies its "desired sources", let's reverse the
     // mapping, creating a mapping from all desired sources to the publishers
@@ -123,22 +140,112 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
       .toMap
   }
 
-  /** Polls and publishes builds from all sources forever. */
-  def poller(implicit httpClient: Client[F]): F[Unit] = {
+  private[chaos] def decodeStateStore(contents: String): Map[String, Int] =
+    contents
+      .linesIterator
+      .collect {
+        case s"$selector=$numberString" => (selector, numberString.toInt)
+      }
+      .toMap
+
+  private[chaos] def encodeStateStore(store: Map[String, Int]): String =
+    store
+      .map {
+        case selector -> number => s"$selector=$number"
+      }
+      .mkString("\n")
+
+  private[chaos] def readStateFile: F[Option[Map[String, Int]]] = {
+    import fs2.io.file
+    import fs2.text
+
+    val stateFilePath = Paths.get(config.stateFilePath)
+
+    file.exists(blocker, stateFilePath).flatMap { exists =>
+      if (exists)
+        file
+          .readAll[F](stateFilePath, blocker, 1024)
+          .through(text.utf8Decode)
+          .compile
+          .string
+          .map(decodeStateStore(_).some)
+      else
+        F.pure(None)
+    }
+  }
+
+  /** Polls and publishes builds from all sources forever, persisting the last
+    * known build in the state file.
+    */
+  def poller(
+      implicit httpClient: Client[F],
+  ): F[Unit] = {
     // Derive the source to publisher mapping.
     val mapping = resolve(config.publishers)
 
-    val poll = Stream
-      .emits(mapping.toList)
-      .map({
-        case source -> publishers =>
-          source.poll(config.interval).evalTap(pollTap(source, publishers) _)
-      })
-      .parJoinUnbounded
-      .compile
-      .drain
+    import fs2.Pipe
 
-    L.info(s"Scraping ${mapping.size} source(s): $mapping") *> poll
+    /** "Continuously overwrite" a string stream into a file, truncating the
+      * file before each write.
+      */
+    def continuouslyOverwrite(path: Path): Pipe[F, String, Unit] = {
+      import fs2.text.utf8Encode
+      import fs2.io.file.WriteCursor
+
+      val cursor =
+        WriteCursor.fromPath(path, blocker, List(StandardOpenOption.CREATE))
+
+      (in) =>
+        in.flatMap(chunk =>
+          Stream
+            .resource(cursor)
+            .flatMap(_.writeAll(Stream(chunk).through(utf8Encode)).void.stream),
+        )
+    }
+
+    val defaultInitialState = Map[String, Int]()
+    val stateFilePath       = Paths.get(config.stateFilePath)
+
+    for {
+      initialState <- readStateFile.map(
+        _.getOrElse(defaultInitialState),
+      )
+      poll = Stream
+        .emits(mapping.toList)
+        .map({
+          case (selectedSource @ SelectedSource(_, source), publishers) =>
+            val initialBuild = initialState
+              .get(selectedSource.selector)
+              .map { number =>
+                // The branch is irrelevant because only the number is
+                // compared.
+                Build(Branch.Stable, "", number, AssetBundle.empty)
+              }
+
+            source
+              .poll(config.interval, initialBuild)
+              // Tap into the poll stream to publish builds.
+              .evalTap(pollTap(source, publishers) _)
+              // Add the selected source to any emitted builds, so we have the
+              // context when saving.
+              .map((selectedSource, _))
+        })
+        // Run all polling streams concurrently.
+        .parJoinUnbounded
+        // Maintain a map of the latest builds for each source.
+        .scan(Map[String, Int]()) {
+          case (accumulator, (selectedSource, Right(Poll(build, _)))) =>
+            accumulator + (selectedSource.selector -> build.number)
+        }
+        // Encode the map into a simple key-value store.
+        .map(encodeStateStore)
+        // Every time a new build is published, save the store into a file.
+        .through(continuouslyOverwrite(stateFilePath))
+        .compile
+        .drain
+      _ <- L.info(s"Scraping ${mapping.size} source(s): $mapping")
+      _ <- poll
+    } yield ()
   }
 
   /** Starts this poller and runs it forever. */
@@ -152,6 +259,8 @@ class Poller[F[_]: Timer] private[chaos] (config: Config)(
 object Poller {
 
   /** Creates a new poller and runs it forever. */
-  def apply[F[_]: ConcurrentEffect: Timer: Logger](config: Config): F[Unit] =
-    new Poller(config).runForever
+  def apply[F[_]: ConcurrentEffect: Timer: Logger: ContextShift](
+      config: Config,
+  ): F[Unit] =
+    Blocker[F].use { blocker => new Poller(config, blocker).runForever }
 }

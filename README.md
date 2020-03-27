@@ -48,6 +48,10 @@ chaos uses [HOCON] for configuration. Create your configuration file,
 # Supported units: second(s), minute(s), hour(s), day(s)
 interval: 5 minutes
 
+# The path of the state file. Here, chaos is able to save the last build it saw,
+# so it doesn't publish the same build twice.
+state_file_path: './state.chaos'
+
 publishers: [
   # Let's add a `discord` publisher to publish new builds to a Discord webhook.
   #
@@ -121,6 +125,10 @@ $ java -Dconfig.file=chaos.conf -jar target/scala-*/chaos-assembly-*.jar
 
 It will run forever, polling Discord and publishing new builds as they are
 detected.
+
+The state file is updated as new builds are detected and published. This makes
+sure that builds aren't published more than once, even across restarts of the
+program.
 
 ### systemd
 
