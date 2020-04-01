@@ -28,19 +28,34 @@ $ git clone https://github.com/slice/chaos.git && cd chaos
 $ sbt assembly
 ```
 
-This will take about a minute to compile the source code and assemble a
-self-contained JAR file with all bytecode and dependencies.
+This will compile a so-called "fat" JAR file that contains all of the program
+bytecode and external dependencies.
 
 ## Operation
 
 chaos works by repeatedly fetching _builds_ from _sources_ at a user-specified
 interval, extracting _metadata_ from those builds, and publishing them to
-various _publishers_. Examples of publishers include standard output (`stdout`)
-or a Discord webhook (`discord`).
+various _publishers_.
+
+For example, the typical use case usually involves scraping from a Discord
+frontend source and publishing builds to a Discord webhook publisher.
+
+You may find this short overview helpful:
+
+<dl>
+  <dt>source</dt>
+  <dd>something that can be scraped for builds</dd>
+
+  <dt>build</dt>
+  <dd>an object representing a deployed version of something</dd>
+
+  <dt>publisher</dt>
+  <dd>something that may receive builds</dd>
+</dl>
 
 ## Configuration
 
-chaos uses [HOCON] for configuration. Create your configuration file,
+chaos uses [HOCON] syntax for configuration. Create your configuration file,
 `chaos.conf`:
 
 ```yaml
@@ -264,9 +279,11 @@ the `fe` source.
 
 ### "variant"
 
-A variant associated with a source. The name refers to how a source can be
-specialized to emit builds of certain variants. For example, the frontend source
-(`fe`) has a variant for each branch: `canary`, `ptb`, and `stable`.
+A variant associated with a source. Usually, the purpose of a variant is to
+narrow down the builds emitted from a source, ultimately determining the
+variant of builds emitted from that source. For example, the Discord frontend
+source (`fe`) has a variant for each branch, so the poller knows which branch
+to make requests to.
 
 ### "publisher"
 
