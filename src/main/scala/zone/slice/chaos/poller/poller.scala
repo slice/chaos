@@ -236,6 +236,7 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
         .scan(Map[String, Int]()) {
           case (accumulator, (selectedSource, Right(Poll(build, _)))) =>
             accumulator + (selectedSource.selector -> build.number)
+          case (accumulator, _) => accumulator
         }
         // Encode the map into a simple key-value store.
         .map(encodeStateStore)
