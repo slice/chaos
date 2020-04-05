@@ -35,7 +35,7 @@ case class Poll[B](build: B, previous: Option[B])
   * @param F the effect type
   * @param B the build type
   */
-abstract class Source[F[_], B] {
+abstract class Source[F[_], +B] {
 
   /** The variant type. */
   type V
@@ -50,7 +50,7 @@ abstract class Source[F[_], B] {
     * Polls for builds forever, emitting `[[Poll]]` objects in a stream that
     * represent a "deploy" (a change in the current build).
     *
-    * Build comparison is determined using the `cats.Order` type class. A
+    * Build comparison is determined using the `cats.Eq` type class. A
     * `Right(poll)` object is emitted when a difference is detected. The
     * `[[Poll]]` object encapsulates information about the current and previous
     * build.
@@ -60,17 +60,17 @@ abstract class Source[F[_], B] {
     *
     * @param rate how long to sleep between pulls
     */
-  def poll(
+  def poll[B2 >: B](
       rate: FiniteDuration,
-      initial: Option[B] = none,
+      initial: Option[B2] = none,
   )(
       implicit F: Applicative[F],
-      O: Order[B],
+      E: Eq[B2],
       T: Timer[F],
-  ): Stream[F, Either[Throwable, Poll[B]]] = {
+  ): Stream[F, Either[Throwable, Poll[B2]]] = {
     import scala.collection.immutable.Queue
 
-    val initialBuild: Option[Either[Throwable, B]] =
+    val initialBuild: Option[Either[Throwable, B2]] =
       initial.map(build => Right(build))
 
     // Skip delaying two times:
@@ -79,7 +79,7 @@ abstract class Source[F[_], B] {
     // 2. To immediately try to fetch the next build.
     val delayStream: Stream[F, FiniteDuration] =
       Stream(0.seconds) ++ Stream(0.seconds) ++ Stream.awakeDelay[F](rate)
-    val buildStream: Stream[F, Option[Either[Throwable, B]]] =
+    val buildStream: Stream[F, Option[Either[Throwable, B2]]] =
       Stream(initialBuild) ++ builds.attempt.map(_.some).repeat
     val delayedBuildStream = delayStream.zipRight(buildStream)
 
@@ -94,7 +94,7 @@ abstract class Source[F[_], B] {
 
         // Two adjacent successful scrapes:
         case Queue(Some(Right(previous)), Some(Right(current)))
-            if O.neqv(current, previous) =>
+            if E.neqv(current, previous) =>
           Right(Poll(current, previous.some))
 
         // Some error happened:

@@ -21,14 +21,13 @@ import scala.util.matching._
   */
 case class FrontendSource[F[_]](val variant: Branch, val httpClient: Client[F])(
     implicit F: Sync[F],
-) extends Source[F, Build] {
+) extends Source[F, FrontendBuild] {
   import FrontendSource._
 
   type V = Branch
 
-  def builds: Stream[F, Build] = {
+  def builds: Stream[F, FrontendBuild] =
     Stream.repeatEval(scrape(variant))
-  }
 
   protected implicit def unsafeLogger: Logger[F] =
     Slf4jLogger.getLogger[F]
@@ -79,17 +78,17 @@ case class FrontendSource[F[_]](val variant: Branch, val httpClient: Client[F])(
   }
 
   /**
-    * Scrapes a [[discord.Branch]] for [[discord.Build build information]].
+    * Scrapes a [[discord.Branch]] for [[discord.FrontendBuild build information]].
     *
     * This takes care of downloading the branch's HTML, finding
     * [[discord.Asset]]s, extracting the build number, etc.
     */
-  def scrape(branch: Branch): F[Build] = {
+  def scrape(branch: Branch): F[FrontendBuild] = {
     for {
       pageText    <- fetchClient(branch)
       assetBundle <- extractAssets(pageText)
       info        <- fetchBuildInfo(assetBundle)
-    } yield Build(
+    } yield FrontendBuild(
       branch = branch,
       hash = info._2,
       number = info._1,

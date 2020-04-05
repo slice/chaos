@@ -97,14 +97,25 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
     def selectSource(selector: String): Set[SelectedSource[F, Build]] = {
       selector match {
         case s"fe:$selector" =>
-          val selected = Select[Branch].multiselect(selector)
-          selected.map({
+          val branch = Select[Branch].multiselect(selector)
+          branch.map({
             case Selected(branch, normalizedSelector) =>
               SelectedSource(
                 s"fe:$normalizedSelector",
                 FrontendSource[F](branch, httpClient),
               )
           })
+        case s"host:$platformSelector-$branchSelector" =>
+          val platforms = Select[Platform].multiselect(platformSelector)
+          val branches  = Select[Branch].multiselect(branchSelector)
+
+          for (Selected(platform, platformS) <- platforms;
+               Selected(branch, branchS)     <- branches) yield {
+            SelectedSource(
+              s"host:$platformS-$branchS",
+              HostSource[F](branch, platform, httpClient),
+            )
+          }
       }
     }
 
@@ -140,22 +151,19 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
       .toMap
   }
 
-  private[chaos] def decodeStateStore(contents: String): Map[String, Int] =
-    contents
-      .linesIterator
-      .collect {
-        case s"$selector=$numberString" => (selector, numberString.toInt)
-      }
-      .toMap
+  private[chaos] def decodeStateStore(contents: String): Map[String, String] =
+    contents.linesIterator.collect {
+      case s"$selector=$version" => (selector, version)
+    }.toMap
 
-  private[chaos] def encodeStateStore(store: Map[String, Int]): String =
+  private[chaos] def encodeStateStore(store: Map[String, String]): String =
     store
       .map {
-        case selector -> number => s"$selector=$number"
+        case selector -> version => s"$selector=$version"
       }
       .mkString("\n")
 
-  private[chaos] def readStateFile: F[Option[Map[String, Int]]] = {
+  private[chaos] def readStateFile: F[Option[Map[String, String]]] = {
     import fs2.io.file
     import fs2.text
 
@@ -203,8 +211,16 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
         )
     }
 
-    val defaultInitialState = Map[String, Int]()
+    val defaultInitialState = Map[String, String]()
     val stateFilePath       = Paths.get(config.stateFilePath)
+
+    /** Create a fake build object.
+      *
+      * This is needed in order to load in the versions stored in the state
+      * file, so that pollers don't think that there's always a new build.
+      */
+    def fakeBuild(version: String): Build =
+      HostBuild(Branch.Stable, Platform.Windows, version, "", none)
 
     for {
       initialState <- readStateFile.map(
@@ -216,11 +232,7 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
           case (selectedSource @ SelectedSource(_, source), publishers) =>
             val initialBuild = initialState
               .get(selectedSource.selector)
-              .map { number =>
-                // The branch is irrelevant because only the number is
-                // compared.
-                Build(Branch.Stable, "", number, AssetBundle.empty)
-              }
+              .map(fakeBuild)
 
             source
               .poll(config.interval, initialBuild)
@@ -233,9 +245,9 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
         // Run all polling streams concurrently.
         .parJoinUnbounded
         // Maintain a map of the latest builds for each source.
-        .scan(Map[String, Int]()) {
+        .scan(Map[String, String]()) {
           case (accumulator, (selectedSource, Right(Poll(build, _)))) =>
-            accumulator + (selectedSource.selector -> build.number)
+            accumulator + (selectedSource.selector -> build.version)
           case (accumulator, _) => accumulator
         }
         // Encode the map into a simple key-value store.

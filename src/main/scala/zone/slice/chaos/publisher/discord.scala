@@ -21,6 +21,8 @@ case class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
     extends Publisher[F]
     with Http4sClientDsl[F] {
 
+  protected val arrow: String = "\u21a9\ufe0f"
+
   protected implicit def unsafeLogger: Logger[F] =
     Slf4jLogger.getLogger[F]
 
@@ -44,12 +46,54 @@ case class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
     } else scripts
   }
 
-  protected def embedForDeploy(deploy: Deploy): F[Json] = {
-    val build = deploy.build
+  protected def embedForDeploy(deploy: Deploy): F[Json] =
+    (deploy match {
+      case Deploy(build: FrontendBuild, isRevert) =>
+        embedForFrontendBuild(build, isRevert)
+      case Deploy(build: HostBuild, isRevert) =>
+        embedForHostBuild(build, isRevert)
+    }) map { embed =>
+      json"""
+      {
+        "username": "chaos",
+        "embeds": [$embed]
+      }
+      """
+    }
 
+  protected def embedForHostBuild(
+      build: HostBuild,
+      isRevert: Boolean,
+  ): F[Json] = {
     val title =
-      if (deploy.isRevert)
-        show"\u21a9\ufe0f ${build.branch} reverted to ${build.number}"
+      if (isRevert)
+        show"$arrow ${build.branch} ${build.platform.name} Host reverted to ${build.version}"
+      else show"${build.branch} ${build.platform.name} Host ${build.version}"
+    val description = build.notes match {
+      case Some(note) if !note.isEmpty => show"Notes:\n\n$note"
+      case _                           => ""
+    }
+
+    currentTimestamp map { timestamp =>
+      json"""
+      {
+        "title": $title,
+        "color": ${build.branch.color},
+        "description": $description,
+        "url": ${build.uri.renderString},
+        "timestamp": $timestamp
+      }
+      """
+    }
+  }
+
+  protected def embedForFrontendBuild(
+      build: FrontendBuild,
+      isRevert: Boolean,
+  ): F[Json] = {
+    val title =
+      if (isRevert)
+        show"$arrow ${build.branch} reverted to ${build.number}"
       else show"${build.branch} ${build.number}"
     val description = s"Hash: `${build.hash}`"
 
@@ -70,24 +114,16 @@ case class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
         "timestamp": $timestamp
       }
       """
-    } map { embed =>
-      json"""
-      {
-        "username": "chaos",
-        "embeds": [$embed]
-      }
-      """
     }
   }
 
-  override def publish(deploy: Deploy): F[Unit] = {
-    val message =
-      show"Publishing ${deploy.build.branch} ${deploy.build.number} to Discord webhook ${webhook.id}"
+  override def publish(deploy: Deploy): F[Unit] =
     for {
-      _     <- Logger[F].info(message)
+      _ <- Logger[F].info(
+        show"Publishing ${deploy.build.branch} ${deploy.build.version} to Discord webhook ${webhook.id}",
+      )
       embed <- embedForDeploy(deploy)
       request = POST(embed, webhook.uri, Headers.userAgentHeader)
       _ <- httpClient.expect[Unit](request)
     } yield ()
-  }
 }

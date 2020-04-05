@@ -207,13 +207,86 @@ https://discordapp.com/api/webhooks/$id/$token
 
 Prints new builds to `stdout` through a format string. Available variables:
 
-| Variable               | Value                                                             |
-| ---------------------- | ----------------------------------------------------------------- |
-| `$branch`              | The name of the branch that the build is from.                    |
-| `$build_number`        | The build number of the build from Discord.                       |
-| `$hash`                | The hash ("Version Hash") of the build from Discord.              |
-| `$asset_filename_list` | A list of all build asset filenames, separated by `,`.            |
-| `$is_revert`           | A boolean (`true` or `false`) indicating if this build isn't new. |
+<table>
+  <tr>
+    <th>Variable</th>
+    <th>Value</th>
+  </tr>
+
+  <tr>
+    <td><code>$branch</code></td>
+    <td>The name of the branch that the build is from.
+    Either <code>Canary</code>, <code>PTB</code>, or <code>Stable</code>.
+    </td>
+  </tr>
+
+  <tr>
+    <td><code>$number</code></td>
+    <td>The numerical representation of the version of this build. For
+    frontend builds, this will simply be the "Build Number". For host builds,
+    this will be the last numerical component of the version number (i.e.
+    <code>Z</code> in <code>X.Y.Z</code>). If chaos is unable to parse the last
+    numerical component, the internal Java hash code of the version string
+    itself will be used.</td>
+  </tr>
+
+  <tr>
+    <td><code>$version</code></td>
+    <td>The version of this build. For frontend builds, this will be the
+    "Build Number". For host builds, this will be the entire version string,
+    e.g. <code>0.0.450</code>.</td>
+  </tr>
+
+  <tr>
+    <td><code>$is_revert</code></td>
+    <td>A boolean string (<code>true</code> or <code>false</code>)
+    indicating if this build was previously deployed.</td>
+  </tr>
+
+  <tr>
+    <td colspan="2">Frontend Builds</td>
+  </tr>
+
+  <tr>
+    <td><code>$hash</code></td>
+    <td>The hash ("Version Hash") of the frontend build. This hash is provided
+    by Discord.</td>
+  </tr>
+
+  <tr>
+    <td><code>$asset_filename_list</td></code>
+    <td>A list of all build asset filenames, separated by a comma and a space.
+    </td>
+  </tr>
+
+  <tr>
+    <td colspan="2">Host Builds</td>
+  </tr>
+
+  <tr>
+    <td><code>$platform</code></td>
+    <td>The platform for this host build. Either <code>Windows</code>,
+    <code>Mac</code>, or <code>Linux.</code></td>
+  </tr>
+
+  <tr>
+    <td><code>$pubDate</code></td>
+    <td>The Discord-provided date that this host build was published at.</td>
+  </tr>
+
+  <tr>
+    <td><code>$url</code></td>
+    <td>The URL to this host build. Discord only provides a URL for Mac host
+    builds, so chaos generates the URL itself for all platforms and branches.
+    </td>
+  </tr>
+
+  <tr>
+    <td><code>$notes</code></td>
+    <td>Any notes provided with this build. If no notes are present (which is
+    almost always the case), this will be <code>&lt;none&gt;</code>.</td>
+  </tr>
+</table>
 
 All logs are sent to `stderr`, so feel free to pipe `stdout` to anywhere you'd
 like when using the `stdout` publisher.
@@ -242,6 +315,30 @@ Variants, in order from least stable to most stable:
   - "Beta" builds. Usually stable enough.
 - `stable`, `s`: Stable
   - The primary branch that the majority of users are on; deployed to the least.
+
+### `host`
+
+`host` refers to the Discord host, which is the wrapper against the online
+client that enables a multitude additional features. In other words, it's the
+desktop application.
+
+This source makes requests to `https://discordapp.com/api/updates/$BRANCH?platform=$PLATFORM`.
+
+The variant is specified as a platform and a branch, separated by a dash. See
+the `fe` source for all branches.
+
+Platforms:
+
+- `osx`, `mac`, `macos`: macOS
+- `win`, `windows`: Windows
+- `linux`: Linux
+
+Examples:
+
+- `host:mac-*`: Scrapes all branches for Mac host builds.
+- `host:*-canary`: Scrapes all platforms for Canary host builds.
+- `host:{mac,linux}-{canary,stable}`: Scrapes Canary and Stable host builds for
+  Mac and Linux.
 
 ## Heuristics
 
