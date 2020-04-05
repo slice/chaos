@@ -243,8 +243,8 @@ Prints new builds to `stdout` through a format string. Available variables:
     indicating if this build was previously deployed.</td>
   </tr>
 
-  <tr>
-    <td colspan="2">Frontend Builds</td>
+  <tr align="center">
+    <td colspan="2"><b>Frontend Builds</b></td>
   </tr>
 
   <tr>
@@ -259,8 +259,8 @@ Prints new builds to `stdout` through a format string. Available variables:
     </td>
   </tr>
 
-  <tr>
-    <td colspan="2">Host Builds</td>
+  <tr align="center">
+    <td colspan="2"><b>Host Builds</b></td>
   </tr>
 
   <tr>
