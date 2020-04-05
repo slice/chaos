@@ -12,6 +12,7 @@ import java.util.concurrent.Executors
 import cats.effect._
 import cats.implicits._
 import fs2.Stream
+import fs2.concurrent.Queue
 import io.chrisdavenport.log4cats.Logger
 import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
@@ -43,7 +44,7 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
   }
 
   /** Publishes a [[Deploy]] to a set of [[Publisher]]s. */
-  def publish(deploy: Deploy, publishers: Set[Publisher[F]]): F[Unit] = {
+  def publish1(deploy: Deploy, publishers: Set[Publisher[F]]): F[Unit] = {
     publishers
       .map(publisher =>
         L.info(s"Publishing fresh ${deploy.build.branch} build to $publisher")
@@ -55,11 +56,12 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
   }
 
   /** Processes an `Either[Throwable, Poll[Build]]` from the polling stream of
-    * a [[Source]], publishing it to a set of [[Publisher]]s if necessary.
+    * a [[Source]], enqueuing it to be published if necessary.
     */
-  def pollTap(
+  def tapEnqueue(
       source: Source[F, Build],
       publishers: Set[Publisher[F]],
+      publishQueue: Queue[F, (Deploy, Set[Publisher[F]])],
   )(either: Either[Throwable, Poll[Build]]): F[Unit] =
     either match {
       case Left(error) =>
@@ -72,8 +74,7 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
         val isRevert = result.previous.exists(build.number < _.number)
         val deploy   = Deploy(result.build, isRevert)
 
-        publish(deploy, publishers)
-          .handleErrorWith(L.error(_)(show"Failed to publish $build"))
+        publishQueue.enqueue1((deploy, publishers))
     }
 
   /** Resolves a list of [[PublisherSetting]]s into a mapping between
@@ -223,9 +224,21 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
       HostBuild(Branch.Stable, Platform.Windows, version, "", none)
 
     for {
+      publishQueue <- Queue.unbounded[F, (Deploy, Set[Publisher[F]])]
+
+      // Dequeue in chunks of a configured size, publishing each chunk at a
+      // metered interval. This is to avoid ratelimits, as we don't handle HTTP
+      // 429s right now.
+      publish = Stream
+        .repeatEval(publishQueue.dequeueChunk1(config.publishQueueChunkSize))
+        .metered(config.publishQueueInterval)
+        .flatMap(Stream.chunk _)
+        .evalTap((publish1 _).tupled)
+
       initialState <- readStateFile.map(
         _.getOrElse(defaultInitialState),
       )
+
       poll = Stream
         .emits(mapping.toList)
         .map({
@@ -237,7 +250,7 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
             source
               .poll(config.interval, initialBuild)
               // Tap into the poll stream to publish builds.
-              .evalTap(pollTap(source, publishers) _)
+              .evalTap(tapEnqueue(source, publishers, publishQueue) _)
               // Add the selected source to any emitted builds, so we have the
               // context when saving.
               .map((selectedSource, _))
@@ -254,10 +267,8 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
         .map(encodeStateStore)
         // Every time a new build is published, save the store into a file.
         .through(continuouslyOverwrite(stateFilePath))
-        .compile
-        .drain
       _ <- L.info(s"Scraping ${mapping.size} source(s): $mapping")
-      _ <- poll
+      _ <- poll.concurrently(publish).compile.drain
     } yield ()
   }
 

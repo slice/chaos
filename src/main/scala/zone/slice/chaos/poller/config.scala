@@ -5,7 +5,7 @@ import io.circe.generic.extras.Configuration
 import io.circe.generic.extras.auto._
 import io.circe.Decoder
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 
 sealed trait PublisherSetting {
 
@@ -38,7 +38,9 @@ final case class DiscordPublisherSetting(
 
 /** A configuration for a [[Poller]]. */
 case class Config(
-    interval: FiniteDuration,
-    publishers: List[PublisherSetting],
+    interval: FiniteDuration = 1.minute,
+    publishQueueChunkSize: Int = 2,
+    publishQueueInterval: FiniteDuration = 3.second,
+    publishers: List[PublisherSetting] = List(),
     stateFilePath: String = "./state.chaos",
 )
