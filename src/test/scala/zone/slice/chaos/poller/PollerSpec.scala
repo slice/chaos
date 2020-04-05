@@ -9,6 +9,7 @@ import source._
 import source.discord._
 
 import io.chrisdavenport.log4cats.testing.TestingLogger
+import cats._
 import cats.implicits._
 import cats.effect._
 
@@ -29,8 +30,8 @@ class PollerSpec extends ChaosSpec {
     val fakeSource  = mock[Source[IO, Build]]
   }
 
-  def makeBuild(number: Int): Build =
-    Build(Canary, "", number, AssetBundle.empty)
+  def makeBuild(number: Int): FrontendBuild =
+    FrontendBuild(Canary, "", number, AssetBundle.empty)
   def makeDeploy(buildNumber: Int): Deploy =
     Deploy(makeBuild(buildNumber), false)
 
@@ -91,8 +92,9 @@ class PollerSpec extends ChaosSpec {
         .pollTap(fakeSource, Set(publisher))(Right(Poll(build, none)))
         .unsafeRunSync()
 
+      val shownBuild = Show[Build].show(build)
       val message =
-        TestingLogger.ERROR(show"Failed to publish $build", Some(exception))
+        TestingLogger.ERROR(s"Failed to publish $shownBuild", Some(exception))
       logged.unsafeRunSync() should contain(message)
     }
 
