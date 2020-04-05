@@ -270,7 +270,7 @@ Prints new builds to `stdout` through a format string. Available variables:
   </tr>
 
   <tr>
-    <td><code>$pubDate</code></td>
+    <td><code>$pub_date</code></td>
     <td>The Discord-provided date that this host build was published at.</td>
   </tr>
 

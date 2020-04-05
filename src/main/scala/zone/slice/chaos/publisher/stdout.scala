@@ -21,7 +21,7 @@ case class StdoutPublisher[F[_]: Sync](format: String) extends Publisher[F] {
       case build: HostBuild =>
         Map(
           "platform" -> build.platform.toString,
-          "pubDate"  -> build.pubDate,
+          "pub_date"  -> build.pubDate,
           "url"      -> build.uri.renderString,
           "notes"    -> build.notes.getOrElse("<none>"),
         )
