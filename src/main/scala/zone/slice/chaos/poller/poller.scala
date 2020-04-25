@@ -15,6 +15,7 @@ import fs2.Stream
 import fs2.concurrent.Queue
 import io.chrisdavenport.log4cats.Logger
 import org.http4s.client.Client
+import org.http4s.client.middleware.FollowRedirect
 import org.http4s.client.blaze.BlazeClientBuilder
 
 import scala.concurrent.ExecutionContext
@@ -276,7 +277,10 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
   def runForever: F[Unit] =
     L.info(show"Starting poller (interval: ${config.interval})") *>
       BlazeClientBuilder[F](executionContext).resource.use {
-        implicit httpClient => poller
+        httpClient => {
+          implicit val wrappedHttpClient = FollowRedirect(5)(httpClient)
+          poller
+        }
       }
 }
 
