@@ -131,7 +131,7 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
       .map({ setting =>
         // Our first step is to resolve the publisher setting objects and
         // selectors into publisher objects and source objects respectively.
-        buildPublisher(setting) -> setting.scrape.flatMap(selectSource),
+        buildPublisher(setting) -> setting.scrape.flatMap(selectSource)
       })
       .flatMap({
         // If a publisher desires builds from more than one source, duplicate it
