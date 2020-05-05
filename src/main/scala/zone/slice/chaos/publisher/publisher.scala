@@ -1,16 +1,21 @@
 package zone.slice.chaos
-package publisher
 
+import cats.Monoid
+import cats.data.Kleisli
 import discord.Deploy
 
-/**
-  * Publishes a fresh [[discord.Deploy]] somewhere.
-  *
-  * In practice, these are used to notify consumers of a new build (for example,
-  * a Discord webhook). A deploy object is published instead of a build object
-  * because a deploy object contains additional context that the receiver might
-  * be interested in.
-  */
 trait Publisher[F[_]] {
-  def publish(deploy: Deploy): F[Unit]
+  def publish: Kleisli[F, Deploy, Unit]
+}
+
+object Publisher {
+  implicit def publisherMonoid[F[_]](implicit kleisliMonoid: Monoid[Kleisli[F, Deploy, Unit]]): Monoid[Publisher[F]] = new Monoid[Publisher[F]] {
+    def empty = new Publisher[F] {
+      val publish = kleisliMonoid.empty
+    }
+
+    def combine(x: Publisher[F], y: Publisher[F]) = new Publisher[F] {
+      val publish = kleisliMonoid.combine(x.publish, y.publish)
+    }
+  }
 }

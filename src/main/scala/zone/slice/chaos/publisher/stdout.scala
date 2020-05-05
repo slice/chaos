@@ -3,6 +3,7 @@ package publisher
 
 import discord._
 
+import cats.data.Kleisli
 import cats.effect.Sync
 
 case class StdoutPublisher[F[_]: Sync](format: String) extends Publisher[F] {
@@ -21,7 +22,7 @@ case class StdoutPublisher[F[_]: Sync](format: String) extends Publisher[F] {
       case build: HostBuild =>
         Map(
           "platform" -> build.platform.toString,
-          "pub_date"  -> build.pubDate,
+          "pub_date" -> build.pubDate,
           "url"      -> build.uri.renderString,
           "notes"    -> build.notes.getOrElse("<none>"),
         )
@@ -35,7 +36,7 @@ case class StdoutPublisher[F[_]: Sync](format: String) extends Publisher[F] {
     ) ++ buildProperties
   }
 
-  override def publish(deploy: Deploy): F[Unit] = {
+  override val publish = Kleisli { deploy =>
     val message = replacers(deploy).foldLeft(format) { (format, mapping) =>
       format.replace(s"$$${mapping._1}", mapping._2)
     }

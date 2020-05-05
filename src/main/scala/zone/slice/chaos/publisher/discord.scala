@@ -5,6 +5,7 @@ import discord._
 import source.Headers
 
 import cats.implicits._
+import cats.data.Kleisli
 import cats.effect.Sync
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
@@ -117,7 +118,7 @@ case class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
     }
   }
 
-  override def publish(deploy: Deploy): F[Unit] =
+  override val publish = Kleisli { deploy =>
     for {
       _ <- Logger[F].info(
         show"Publishing ${deploy.build.branch} ${deploy.build.version} to Discord webhook ${webhook.id}",
@@ -126,4 +127,5 @@ case class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
       request = POST(embed, webhook.uri, Headers.userAgentHeader)
       _ <- httpClient.expect[Unit](request)
     } yield ()
+  }
 }
