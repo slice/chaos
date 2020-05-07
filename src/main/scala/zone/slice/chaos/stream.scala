@@ -15,9 +15,14 @@ package object stream {
       blocker: Blocker,
       path: Path,
   ): Pipe[F, String, Unit] = {
+    import StandardOpenOption._
 
     val cursor =
-      WriteCursor.fromPath(path, blocker, List(StandardOpenOption.CREATE))
+      WriteCursor.fromPath(
+        path,
+        blocker,
+        List(CREATE, WRITE, TRUNCATE_EXISTING),
+      )
 
     (in) =>
       in.flatMap(chunk =>
