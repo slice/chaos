@@ -10,7 +10,6 @@ import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import org.http4s.{Request, Uri}
 import org.http4s.client.Client
-import fs2.Stream
 
 import scala.util.matching._
 
@@ -19,15 +18,12 @@ import scala.util.matching._
   *
   * @param scraper the scraper
   */
-case class FrontendSource[F[_]](val variant: Branch, val httpClient: Client[F])(
+case class FrontendSource[F[+_]](val variant: Branch, val httpClient: Client[F])(
     implicit F: Sync[F],
 ) extends Source[F, FrontendBuild] {
   import FrontendSource._
 
   type V = Branch
-
-  def builds: Stream[F, FrontendBuild] =
-    Stream.repeatEval(scrape(variant))
 
   protected implicit def unsafeLogger: Logger[F] =
     Slf4jLogger.getLogger[F]
@@ -83,13 +79,13 @@ case class FrontendSource[F[_]](val variant: Branch, val httpClient: Client[F])(
     * This takes care of downloading the branch's HTML, finding
     * [[discord.Asset]]s, extracting the build number, etc.
     */
-  def scrape(branch: Branch): F[FrontendBuild] = {
+  def build: F[FrontendBuild] = {
     for {
-      pageText    <- fetchClient(branch)
+      pageText    <- fetchClient(variant)
       assetBundle <- extractAssets(pageText)
       info        <- fetchBuildInfo(assetBundle)
     } yield FrontendBuild(
-      branch = branch,
+      branch = variant,
       hash = info._2,
       number = info._1,
       assets = assetBundle,

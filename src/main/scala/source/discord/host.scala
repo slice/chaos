@@ -6,7 +6,6 @@ import zone.slice.chaos.discord._
 
 import cats.effect.Sync
 import cats.implicits._
-import fs2.Stream
 import io.chrisdavenport.log4cats.Logger
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import io.circe.generic.extras.Configuration
@@ -15,7 +14,7 @@ import org.http4s.{Request, Uri}
 import org.http4s.circe.jsonOf
 import org.http4s.client.Client
 
-case class HostSource[F[_]: Sync](
+case class HostSource[F[+_]: Sync](
     val branch: Branch,
     val platform: Platform,
     val httpClient: Client[F],
@@ -26,9 +25,6 @@ case class HostSource[F[_]: Sync](
 
   type V = (Branch, Platform)
   def variant = (branch, platform)
-
-  def builds: Stream[F, HostBuild] =
-    Stream.repeatEval(scrape)
 
   def updatesUri: Uri = {
     val base           = "https://discordapp.com/api/updates"
@@ -43,7 +39,7 @@ case class HostSource[F[_]: Sync](
 
   implicit def hostBuildDecoder = jsonOf[F, HostBuild]
 
-  def scrape: F[HostBuild] = {
+  def build: F[HostBuild] = {
     for {
       _ <- Logger[F].debug(show"Fetching host updates for $branch on $platform")
       request = Request[F](uri = updatesUri, headers = Headers.headers)

@@ -15,10 +15,11 @@ class SourceSpec extends ChaosSpec {
     case class FixedVariantSource(val variant: String)
         extends Source[IO, String] {
       type V = String
-      def builds: Stream[IO, String] = {
-        val ints = Stream.iterate(0)(_ + 1)
-        ints.map(version => s"$variant, $version")
-      }
+      def build = IO.pure(variant)
+      override def builds: Stream[IO, String] =
+        Stream.repeatEval(build).zip(Stream.iterate(0)(_ + 1)).map {
+          case (item, n) => s"$item, $n"
+        }
     }
   }
 
@@ -118,8 +119,9 @@ class SourceSpec extends ChaosSpec {
       val failingSource = new Source[IO, String] {
         type V = String
         def variant: String = "cat"
-        def builds: Stream[IO, String] =
-          Stream(variant) ++ Stream.raiseError[IO](error)
+        def build: IO[String] = IO.pure(variant)
+        override def builds: Stream[IO, String] =
+          Stream.eval(build) ++ Stream.raiseError[IO](error)
       }
 
       val cancel = failingSource

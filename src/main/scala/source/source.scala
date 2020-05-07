@@ -36,7 +36,7 @@ case class Poll[B](build: B, previous: Option[B])
   * @param F the effect type
   * @param B the build type
   */
-abstract class Source[F[_], +B] {
+abstract class Source[F[+_], +B] {
 
   /** The variant type. */
   type V
@@ -44,8 +44,11 @@ abstract class Source[F[_], +B] {
   /* The variant of builds being produced by this source. */
   def variant: V
 
-  /** The stream of builds specialized to the variant. */
-  def builds: Stream[F, B]
+  /** A single build. */
+  def build: F[B]
+
+  /** The stream of builds. */
+  def builds: Stream[F, B] = Stream.repeatEval(build)
 
   /**
     * Polls for builds forever, emitting `[[Poll]]` objects in a stream that
@@ -114,17 +117,14 @@ abstract class Source[F[_], +B] {
 }
 
 object Source {
-  implicit def eqSource[F[_], B]: Eq[Source[F, B]] =
+  implicit def eqSource[F[+_], B]: Eq[Source[F, B]] =
     Eq.fromUniversalEquals
 
-  def limited[F[_]: Concurrent: Limiter, B](source: Source[F, B]) =
+  def limited[F[+_]: Concurrent: Limiter, B](source: Source[F, B], priority: Int = 0) =
     new Source[F, B] {
       type V = source.V
       def variant = source.variant
-      def builds =
-        Stream.repeatEval(
-          Limiter.await[F, B](source.builds.head.compile.last.map(_.get)),
-        )
+      def build = Limiter.await[F, B](source.build, priority)
     }
 }
 
@@ -134,4 +134,4 @@ object Source {
   * only together in a case class. This is useful when you need to persist the
   * selector string alongside the source.
   */
-case class SelectedSource[F[_], B](selector: String, source: Source[F, B])
+case class SelectedSource[F[+_], B](selector: String, source: Source[F, B])
