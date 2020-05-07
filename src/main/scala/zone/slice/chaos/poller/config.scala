@@ -39,9 +39,6 @@ final case class DiscordPublisherSetting(
 /** A configuration for a [[Poller]]. */
 case class Config(
     interval: FiniteDuration = 1.minute,
-    scrapeRatelimit: FiniteDuration = 5.second,
-    publishQueueChunkSize: Int = 2,
-    publishQueueInterval: FiniteDuration = 3.second,
     publishers: List[PublisherSetting] = List(),
     stateFilePath: String = "./state.chaos",
 )
