@@ -9,7 +9,9 @@ trait Publisher[F[_]] {
 }
 
 object Publisher {
-  implicit def publisherMonoid[F[_]](implicit kleisliMonoid: Monoid[Kleisli[F, Deploy, Unit]]): Monoid[Publisher[F]] = new Monoid[Publisher[F]] {
+  implicit def publisherMonoid[F[_]](
+      implicit kleisliMonoid: Monoid[Kleisli[F, Deploy, Unit]],
+  ): Monoid[Publisher[F]] = new Monoid[Publisher[F]] {
     def empty = new Publisher[F] {
       val publish = kleisliMonoid.empty
     }

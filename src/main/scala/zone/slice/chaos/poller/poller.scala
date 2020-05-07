@@ -64,7 +64,8 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
           }
           if (isApplicable)
             L.info(show"Enqueueing publish for $deploy") *> limiter.submit(
-              innerPublish(deploy), 1
+              innerPublish(deploy),
+              1,
             )
           else F.unit
       }
