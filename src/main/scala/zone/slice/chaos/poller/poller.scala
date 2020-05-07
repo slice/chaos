@@ -179,7 +179,7 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
               publishers.toVector.combineAll.publish(deploy)
           }
         }
-        .scan(Map[String, String]()) {
+        .scan(initialState) {
           case (acc, selectedSource -> Right(Poll(build, _))) =>
             acc + (selectedSource.selector -> build.version)
           case (acc, _) => acc
