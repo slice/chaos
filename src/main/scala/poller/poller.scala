@@ -103,36 +103,7 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
     }
   }
 
-  private[chaos] def decodeStateStore(contents: String): Map[String, String] =
-    contents.linesIterator.collect {
-      case s"$selector=$version" => (selector, version)
-    }.toMap
-
-  private[chaos] def encodeStateStore(store: Map[String, String]): String =
-    store
-      .map {
-        case selector -> version => s"$selector=$version"
-      }
-      .mkString("\n")
-
   def stateFilePath: Path = Paths.get(config.stateFilePath)
-
-  private[chaos] def readStateFile: F[Option[Map[String, String]]] = {
-    import fs2.io.file
-    import fs2.text
-
-    file.exists(blocker, stateFilePath).flatMap { exists =>
-      if (exists)
-        file
-          .readAll[F](stateFilePath, blocker, 1024)
-          .through(text.utf8Decode)
-          .compile
-          .string
-          .map(decodeStateStore(_).some)
-      else
-        F.pure(None)
-    }
-  }
 
   /** Create a fake build object.
     *
@@ -162,7 +133,10 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
     val sources    = mapped.map(_._2)
 
     for {
-      initialState <- readStateFile.map(_.getOrElse(Map[String, String]()))
+      initialState <-
+        State
+          .read(stateFilePath, blocker)
+          .map(_.getOrElse(Map[String, String]()))
 
       go =
         Stream
@@ -191,7 +165,7 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
               acc + (selectedSource.selector -> build.version)
             case (acc, _) => acc
           }
-          .map(encodeStateStore)
+          .map(State.encode)
           .through(continuouslyOverwrite(blocker, stateFilePath))
 
       _ <- L.info(s"Scraping ${sources.size} source(s): $mapped")
