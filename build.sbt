@@ -30,6 +30,7 @@ val V = new {
   val `typesafe-config` = "1.4.0"
   val scalatest         = "3.1.0"
   val `mockito-scala`   = "1.11.2"
+  val upperbound        = "0.3.0"
 }
 
 val dependencies = Seq(
@@ -53,6 +54,7 @@ val dependencies = Seq(
   "org.scalatest"     %% "scalatest"               % V.scalatest % Test,
   "org.mockito"       %% "mockito-scala"           % V.`mockito-scala` % Test,
   "org.mockito"       %% "mockito-scala-scalatest" % V.`mockito-scala` % Test,
+  "org.systemfw"      %% "upperbound"              % V.upperbound,
 )
 
 lazy val chaos = (project in file("."))
@@ -68,4 +70,5 @@ lazy val chaos = (project in file("."))
     // See: https://github.com/mockito/mockito-scala/issues/29
     Test / scalacOptions -= "-Wdead-code",
     reStart / javaOptions += "-Dconfig.file=./application.conf",
+    addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1")
   )

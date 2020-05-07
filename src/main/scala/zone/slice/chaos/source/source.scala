@@ -4,6 +4,7 @@ package source
 import cats._
 import cats.effect._
 import cats.implicits._
+import upperbound._
 import fs2.Stream
 
 import scala.concurrent.duration._
@@ -115,6 +116,16 @@ abstract class Source[F[_], +B] {
 object Source {
   implicit def eqSource[F[_], B]: Eq[Source[F, B]] =
     Eq.fromUniversalEquals
+
+  def limited[F[_]: Concurrent: Limiter, B](source: Source[F, B]) =
+    new Source[F, B] {
+      type V = source.V
+      def variant = source.variant
+      def builds =
+        Stream.repeatEval(
+          Limiter.await[F, B](source.builds.head.compile.last.map(_.get)),
+        )
+    }
 }
 
 /** A case class containing both a selector string and the selected source.

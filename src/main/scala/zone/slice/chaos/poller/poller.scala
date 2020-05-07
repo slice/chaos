@@ -15,6 +15,8 @@ import cats.data.Kleisli
 import cats.effect._
 import cats.implicits._
 import fs2.Stream
+import upperbound.Limiter
+import upperbound.syntax.rate._
 import io.chrisdavenport.log4cats.Logger
 import org.http4s.client.Client
 import org.http4s.client.middleware.FollowRedirect
@@ -41,7 +43,7 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
   private[chaos] def buildPublisher(
       setting: PublisherSetting,
       source: Source[F, Build],
-  )(implicit httpClient: Client[F]): Publisher[F] = {
+  )(implicit httpClient: Client[F], limiter: Limiter[F]): Publisher[F] = {
     val innerPublish = setting match {
       case DiscordPublisherSetting(id, token, _) =>
         DiscordPublisher[F](Webhook(id, token), httpClient).publish
@@ -60,7 +62,11 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
               true
             case _ => false
           }
-          if (isApplicable) innerPublish(deploy) else F.unit
+          if (isApplicable)
+            L.info(show"Enqueueing publish for $deploy") *> limiter.submit(
+              innerPublish(deploy), 1
+            )
+          else F.unit
       }
     }
   }
@@ -138,6 +144,7 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
     */
   def poller(
       implicit httpClient: Client[F],
+      LM: Limiter[F],
   ): F[Unit] = {
     val mapped: Set[(Publisher[F], SelectedSource[F, Build])] = (for {
       setting        <- config.publishers
@@ -156,7 +163,10 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
         .map {
           case selectedSource @ SelectedSource(selector, source) =>
             val initialBuild = initialState.get(selector).map(fakeBuild(_))
-            source.poll(config.interval, initialBuild).map((selectedSource, _))
+            Source
+              .limited(source)
+              .poll(config.interval, initialBuild)
+              .map((selectedSource, _))
         }
         .parJoinUnbounded
         .evalTap { item =>
@@ -183,14 +193,19 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (
   }
 
   /** Starts this poller and runs it forever. */
-  def runForever: F[Unit] =
-    L.info(show"Starting poller (interval: ${config.interval})") *>
-      BlazeClientBuilder[F](executionContext).resource.use { httpClient =>
-        {
-          implicit val wrappedHttpClient = FollowRedirect(5)(httpClient)
-          poller
-        }
-      }
+  def run: F[Unit] = {
+    val resources = for {
+      httpClient <- BlazeClientBuilder[F](executionContext).resource
+      limiter    <- Limiter.start[F](1 every config.requestRatelimit)
+    } yield {
+      (FollowRedirect(5)(httpClient), limiter)
+    }
+
+    resources.use {
+      case (implicit0(httpClient: Client[F]), implicit0(limiter: Limiter[F])) =>
+        poller
+    }
+  }
 }
 
 object Poller {
@@ -199,5 +214,5 @@ object Poller {
   def apply[F[_]: ConcurrentEffect: Timer: Logger: ContextShift](
       config: Config,
   )(implicit UM: Monoid[F[Unit]]): F[Unit] =
-    Blocker[F].use { blocker => new Poller(config, blocker).runForever }
+    Blocker[F].use { blocker => new Poller(config, blocker).run }
 }
