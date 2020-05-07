@@ -21,11 +21,12 @@ sealed trait Branch {
     }
 
   /** The "color" of this branch. */
-  def color: Int = this match {
-    case Branch.Stable => 0x7289da
-    case Branch.PTB    => 0x99aab5
-    case Branch.Canary => 0xf1c40f
-  }
+  def color: Int =
+    this match {
+      case Branch.Stable => 0x7289da
+      case Branch.PTB    => 0x99aab5
+      case Branch.Canary => 0xf1c40f
+    }
 }
 
 object Branch {

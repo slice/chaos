@@ -37,17 +37,18 @@ object Platform {
   implicit def showPlatform: Show[Platform] =
     (plat: Platform) => s"Platform(${plat.identifier})"
 
-  implicit def selectPlatform: Select[Platform] = new Select[Platform] {
-    val all: Map[String, Platform] = Map(
-      "win"   -> Windows,
-      "osx"   -> Mac,
-      "linux" -> Linux,
-    )
+  implicit def selectPlatform: Select[Platform] =
+    new Select[Platform] {
+      val all: Map[String, Platform] = Map(
+        "win"   -> Windows,
+        "osx"   -> Mac,
+        "linux" -> Linux,
+      )
 
-    override val aliases: Map[String, String] = Map(
-      "mac"     -> "osx",
-      "macos"   -> "osx",
-      "windows" -> "win",
-    )
-  }
+      override val aliases: Map[String, String] = Map(
+        "mac"     -> "osx",
+        "macos"   -> "osx",
+        "windows" -> "win",
+      )
+    }
 }

@@ -67,8 +67,8 @@ abstract class Source[F[+_], +B] {
   def poll[B2 >: B](
       rate: FiniteDuration,
       initial: Option[B2] = none,
-  )(
-      implicit F: Applicative[F],
+  )(implicit
+      F: Applicative[F],
       E: Eq[B2],
       T: Timer[F],
   ): Stream[F, Either[Throwable, Poll[B2]]] = {
@@ -120,11 +120,14 @@ object Source {
   implicit def eqSource[F[+_], B]: Eq[Source[F, B]] =
     Eq.fromUniversalEquals
 
-  def limited[F[+_]: Concurrent: Limiter, B](source: Source[F, B], priority: Int = 0) =
+  def limited[F[+_]: Concurrent: Limiter, B](
+      source: Source[F, B],
+      priority: Int = 0,
+  ) =
     new Source[F, B] {
       type V = source.V
       def variant = source.variant
-      def build = Limiter.await[F, B](source.build, priority)
+      def build   = Limiter.await[F, B](source.build, priority)
     }
 }
 

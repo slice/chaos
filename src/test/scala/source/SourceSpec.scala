@@ -118,7 +118,7 @@ class SourceSpec extends ChaosSpec {
 
       val failingSource = new Source[IO, String] {
         type V = String
-        def variant: String = "cat"
+        def variant: String   = "cat"
         def build: IO[String] = IO.pure(variant)
         override def builds: Stream[IO, String] =
           Stream.eval(build) ++ Stream.raiseError[IO](error)

@@ -18,8 +18,11 @@ import scala.util.matching._
   *
   * @param scraper the scraper
   */
-case class FrontendSource[F[+_]](val variant: Branch, val httpClient: Client[F])(
-    implicit F: Sync[F],
+case class FrontendSource[F[+_]](
+    val variant: Branch,
+    val httpClient: Client[F],
+)(implicit
+    F: Sync[F],
 ) extends Source[F, FrontendBuild] {
   import FrontendSource._
 
@@ -66,9 +69,10 @@ case class FrontendSource[F[+_]](val variant: Branch, val httpClient: Client[F])
     for {
       mainScript <- F.fromOption(assets.scripts.lastOption, NoScripts)
       text       <- fetch(mainScript.uri)
-      maybeInfo = buildMetadataRegex
-        .findFirstMatchIn(text)
-        .map(match_ => (match_.group(1).toInt, match_.group(2)))
+      maybeInfo =
+        buildMetadataRegex
+          .findFirstMatchIn(text)
+          .map(match_ => (match_.group(1).toInt, match_.group(2)))
       info <- F.fromOption(maybeInfo, NoBuildInfo)
     } yield info
   }

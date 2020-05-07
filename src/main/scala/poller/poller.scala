@@ -27,8 +27,8 @@ import scala.concurrent.ExecutionContext
 class Poller[F[+_]: Timer: ContextShift] private[chaos] (
     config: Config,
     blocker: Blocker,
-)(
-    implicit F: ConcurrentEffect[F],
+)(implicit
+    F: ConcurrentEffect[F],
     L: Logger[F],
     UM: Monoid[F[Unit]],
 ) {
@@ -90,8 +90,10 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
         val platforms = Select[Platform].multiselect(platformSelector)
         val branches  = Select[Branch].multiselect(branchSelector)
 
-        for (Selected(platform, platformS) <- platforms;
-             Selected(branch, branchS)     <- branches) yield {
+        for (
+          Selected(platform, platformS) <- platforms;
+          Selected(branch, branchS)     <- branches
+        ) yield {
           SelectedSource(
             s"host:$platformS-$branchS",
             HostSource[F](branch, platform, httpClient),
@@ -143,15 +145,18 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
   /** Polls and publishes builds from all sources forever, persisting the last
     * known build in the state file.
     */
-  def poller(
-      implicit httpClient: Client[F],
+  def poller(implicit
+      httpClient: Client[F],
       LM: Limiter[F],
   ): F[Unit] = {
     val mapped: Set[(Publisher[F], SelectedSource[F, Build])] = (for {
       setting        <- config.publishers
       selector       <- setting.scrape
       selectedSource <- selectSource(selector)
-    } yield (buildPublisher(setting, selectedSource.source), selectedSource)).toSet
+    } yield (
+      buildPublisher(setting, selectedSource.source),
+      selectedSource,
+    )).toSet
 
     val publishers = mapped.map(_._1)
     val sources    = mapped.map(_._2)
@@ -159,34 +164,35 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
     for {
       initialState <- readStateFile.map(_.getOrElse(Map[String, String]()))
 
-      go = Stream
-        .emits(sources.toVector)
-        .map {
-          case selectedSource @ SelectedSource(selector, source) =>
-            val initialBuild = initialState.get(selector).map(fakeBuild(_))
-            Source
-              .limited(source)
-              .poll(config.interval, initialBuild)
-              .map((selectedSource, _))
-        }
-        .parJoinUnbounded
-        .evalTap { item =>
-          item match {
-            case source -> Left(error) =>
-              L.error(error)(s"Failed to scrape from $source")
-            case _ -> Right(Poll(build, prev)) =>
-              val isRevert = prev.exists(build.number < _.number)
-              val deploy   = Deploy(build, isRevert)
-              publishers.toVector.combineAll.publish(deploy)
+      go =
+        Stream
+          .emits(sources.toVector)
+          .map {
+            case selectedSource @ SelectedSource(selector, source) =>
+              val initialBuild = initialState.get(selector).map(fakeBuild(_))
+              Source
+                .limited(source)
+                .poll(config.interval, initialBuild)
+                .map((selectedSource, _))
           }
-        }
-        .scan(initialState) {
-          case (acc, selectedSource -> Right(Poll(build, _))) =>
-            acc + (selectedSource.selector -> build.version)
-          case (acc, _) => acc
-        }
-        .map(encodeStateStore)
-        .through(continuouslyOverwrite(blocker, stateFilePath))
+          .parJoinUnbounded
+          .evalTap { item =>
+            item match {
+              case source -> Left(error) =>
+                L.error(error)(s"Failed to scrape from $source")
+              case _ -> Right(Poll(build, prev)) =>
+                val isRevert = prev.exists(build.number < _.number)
+                val deploy   = Deploy(build, isRevert)
+                publishers.toVector.combineAll.publish(deploy)
+            }
+          }
+          .scan(initialState) {
+            case (acc, selectedSource -> Right(Poll(build, _))) =>
+              acc + (selectedSource.selector -> build.version)
+            case (acc, _) => acc
+          }
+          .map(encodeStateStore)
+          .through(continuouslyOverwrite(blocker, stateFilePath))
 
       _ <- L.info(s"Scraping ${sources.size} source(s): $mapped")
       _ <- go.compile.drain

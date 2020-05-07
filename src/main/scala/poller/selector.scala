@@ -36,40 +36,43 @@ trait Select[A] {
   /** Selects a set of items from a selector string, allowing for
     * multiselection syntax and star globbing.
     */
-  def multiselect(selector: String): Set[Selected[A]] = selector match {
-    // {first,second,third,...}
-    case _ if selector.startsWith("{") && selector.endsWith("}") =>
-      selector
-        .substring(1, selector.length - 1)
-        .split(',')
-        .toSet
-        .flatMap(select)
-    case "*" =>
-      all
-        .map({
-          case (normalizedSelector, item) =>
-            Selected(item, normalizedSelector)
-        })
-        .toSet
-    case _ =>
-      select(selector).toSet
-  }
+  def multiselect(selector: String): Set[Selected[A]] =
+    selector match {
+      // {first,second,third,...}
+      case _ if selector.startsWith("{") && selector.endsWith("}") =>
+        selector
+          .substring(1, selector.length - 1)
+          .split(',')
+          .toSet
+          .flatMap(select)
+      case "*" =>
+        all
+          .map({
+            case (normalizedSelector, item) =>
+              Selected(item, normalizedSelector)
+          })
+          .toSet
+      case _ =>
+        select(selector).toSet
+    }
 }
 
 object Select {
   def apply[A](implicit ev: Select[A]): Select[A] = ev
 
   implicit val selectBranch: Select[Branch] = new Select[Branch] {
-    def all: Map[String, Branch] = Map(
-      "stable" -> Branch.Stable,
-      "ptb"    -> Branch.PTB,
-      "canary" -> Branch.Canary,
-    )
+    def all: Map[String, Branch] =
+      Map(
+        "stable" -> Branch.Stable,
+        "ptb"    -> Branch.PTB,
+        "canary" -> Branch.Canary,
+      )
 
-    override def aliases: Map[String, String] = Map(
-      "s" -> "stable",
-      "p" -> "ptb",
-      "c" -> "canary",
-    )
+    override def aliases: Map[String, String] =
+      Map(
+        "s" -> "stable",
+        "p" -> "ptb",
+        "c" -> "canary",
+      )
   }
 }
