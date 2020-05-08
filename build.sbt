@@ -65,7 +65,7 @@ lazy val chaos = (project in file("."))
     libraryDependencies ++= dependencies,
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, homepage),
     buildInfoPackage := "zone.slice.chaos",
-    Test / scalacOptions ++= Seq("-Yrangepos"),
+    Test / scalacOptions += "-Yrangepos",
     // A workaround for some type inference issues.
     // See: https://github.com/mockito/mockito-scala/issues/29
     Test / scalacOptions -= "-Wdead-code",
