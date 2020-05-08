@@ -1,6 +1,6 @@
 package zone.slice.chaos
 
-import cats.Monoid
+import cats._
 import cats.data.Kleisli
 import discord.Deploy
 
@@ -10,17 +10,17 @@ trait Publisher[F[_]] {
 
 object Publisher {
   implicit def publisherMonoid[F[_]](implicit
-      kleisliMonoid: Monoid[Kleisli[F, Deploy, Unit]],
+      ev: Monoid[Kleisli[F, Deploy, Unit]],
   ): Monoid[Publisher[F]] =
     new Monoid[Publisher[F]] {
       def empty =
         new Publisher[F] {
-          val publish = kleisliMonoid.empty
+          val publish = ev.empty
         }
 
       def combine(x: Publisher[F], y: Publisher[F]) =
         new Publisher[F] {
-          val publish = kleisliMonoid.combine(x.publish, y.publish)
+          val publish = ev.combine(x.publish, y.publish)
         }
     }
 }

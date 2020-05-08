@@ -10,7 +10,7 @@ import source.discord._
 import java.nio.file._
 import java.util.concurrent.Executors
 
-import cats.Monoid
+import cats.{Monoid, InvariantMonoidal}
 import cats.data.Kleisli
 import cats.effect._
 import cats.implicits._
@@ -30,7 +30,6 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
 )(implicit
     F: ConcurrentEffect[F],
     L: Logger[F],
-    UM: Monoid[F[Unit]],
 ) {
   protected val executionContext: ExecutionContext =
     ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
@@ -157,6 +156,8 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
               case _ -> Right(Poll(build, prev)) =>
                 val isRevert = prev.exists(build.number < _.number)
                 val deploy   = Deploy(build, isRevert)
+                implicit val monoidFUnit: Monoid[F[Unit]] =
+                  InvariantMonoidal.monoid[F, Unit]
                 publishers.toVector.combineAll.publish(deploy)
             }
           }
@@ -194,6 +195,6 @@ object Poller {
   /** Creates a new poller and runs it forever. */
   def apply[F[+_]: ConcurrentEffect: Timer: Logger: ContextShift](
       config: Config,
-  )(implicit UM: Monoid[F[Unit]]): F[Unit] =
+  ): F[Unit] =
     Blocker[F].use { blocker => new Poller[F](config, blocker).run }
 }

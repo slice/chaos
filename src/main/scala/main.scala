@@ -30,9 +30,7 @@ object Main extends IOApp {
         eput(s"Failed to load config file: $error")
     }
 
-  def program[F[+_]: ConcurrentEffect: Timer: ContextShift](implicit
-      UM: cats.Monoid[F[Unit]],
-  ): F[ExitCode] =
+  def program[F[+_]: ConcurrentEffect: Timer: ContextShift]: F[ExitCode] =
     parser
       .decodeF[F, Config]()
       .attemptT
