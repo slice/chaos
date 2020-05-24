@@ -3,6 +3,8 @@ package discord
 
 import poller._
 
+import io.circe._
+import io.circe.generic.semiauto._
 import cats._
 
 /** A platform for which Discord host builds are deployed. */
@@ -33,6 +35,8 @@ object Platform {
 
   /** The set of all platforms. */
   def all: Set[Platform] = Set(Windows, Mac, Linux)
+
+  implicit val platformEncoder: Encoder[Platform] = deriveEncoder
 
   implicit def showPlatform: Show[Platform] =
     (plat: Platform) => s"Platform(${plat.identifier})"

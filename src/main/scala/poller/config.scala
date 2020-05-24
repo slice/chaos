@@ -1,6 +1,9 @@
 package zone.slice.chaos
 package poller
 
+import scala.util.Try
+
+import org.http4s.Uri
 import io.circe.generic.extras.Configuration
 import io.circe.generic.extras.auto._
 import io.circe.Decoder
@@ -17,11 +20,15 @@ object PublisherSetting {
   implicit val circeConfiguration: Configuration =
     Configuration.default.withDefaults.withSnakeCaseMemberNames
 
+  implicit val decodeUri: Decoder[Uri] =
+    Decoder.decodeString.emapTry { str => Try(Uri.unsafeFromString(str)) }
+
   implicit val decodePublisherSetting: Decoder[PublisherSetting] =
     Decoder.instance { cursor =>
       cursor.downField("type").as[String].flatMap {
         case "discord" => cursor.as[DiscordPublisherSetting]
         case "stdout"  => cursor.as[StdoutPublisherSetting]
+        case "webhook" => cursor.as[WebhookPublisherSetting]
       }
     }
 }
@@ -33,6 +40,10 @@ final case class StdoutPublisherSetting(
 final case class DiscordPublisherSetting(
     id: BigInt,
     token: String,
+    scrape: Set[String],
+) extends PublisherSetting
+final case class WebhookPublisherSetting(
+    uri: Uri,
     scrape: Set[String],
 ) extends PublisherSetting
 

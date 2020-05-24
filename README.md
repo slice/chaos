@@ -196,6 +196,17 @@ To extract the ID and token from a webhook URL, consult this format:
 https://discordapp.com/api/webhooks/$id/$token
 ```
 
+### `webhook`
+
+```yaml
+{
+  type: "webhook"
+  uri: "https://..."
+}
+```
+
+Publishes new builds to a webhook as JSON.
+
 ### `stdout`
 
 ```yaml

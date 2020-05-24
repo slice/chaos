@@ -5,6 +5,8 @@ import cats.{Show, Eq}
 import cats.implicits._
 import org.http4s.Uri
 import io.circe._
+import io.circe.generic.extras.semiauto._
+import io.circe.generic.extras.Configuration
 
 /** A snapshot of a deployed Discord build at a point in time. */
 sealed trait Build {
@@ -42,6 +44,12 @@ final case class FrontendBuild(
 }
 
 object FrontendBuild {
+  implicit val config: Configuration =
+    Configuration.default.withSnakeCaseMemberNames
+
+  implicit val encodeFrontendBuild: Encoder[FrontendBuild] =
+    deriveConfiguredEncoder
+
   implicit val showBuild: Show[FrontendBuild] = (build: FrontendBuild) =>
     show"Build(${build.branch}, ${build.number}, assets = ${build.assets})"
 }
@@ -98,7 +106,12 @@ final case class HostBuild(
 
 object HostBuild {
   implicit val showHostBuild: Show[HostBuild] = (build: HostBuild) =>
-    show"HostBuild(${build.branch}, ${build.version}, )"
+    show"HostBuild(${build.branch}, ${build.version})"
+
+  implicit val config: Configuration =
+    Configuration.default.withSnakeCaseMemberNames
+
+  implicit val encodeHostBuild: Encoder[HostBuild] = deriveConfiguredEncoder
 
   implicit val decodeHostBuild: Decoder[HostBuild] = Decoder.instance {
     cursor =>

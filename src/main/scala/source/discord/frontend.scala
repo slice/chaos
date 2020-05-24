@@ -55,9 +55,9 @@ case class FrontendSource[F[+_]](
 
     import FrontendSourceError._
     (
-      pull(Asset.Script, NoScripts, scriptTagRegex),
-      pull(Asset.Stylesheet, NoStylesheets, styleTagRegex),
-    ).mapN(AssetBundle.apply)
+      pull(asset => Asset.Script(asset), NoScripts, scriptTagRegex),
+      pull(asset => Asset.Stylesheet(asset), NoStylesheets, styleTagRegex),
+    ).mapN(AssetBundle.apply _)
   }
 
   /**

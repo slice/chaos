@@ -3,6 +3,9 @@ package discord
 
 import Asset._
 
+import io.circe._
+import io.circe.literal._
+import io.circe.generic.semiauto._
 import cats.Show
 import cats.implicits._
 import org.http4s.Uri
@@ -25,12 +28,32 @@ sealed trait Asset {
 }
 
 object Asset {
+  implicit val encodeAsset: Encoder[Asset] = Encoder.instance { asset =>
+    json"""
+    {
+      "name": ${asset.name},
+      "extension": ${asset.extension},
+      "uri": ${asset.uri.renderString}
+    }
+    """
+  }
+
   final case class Script(name: String) extends Asset {
     override val extension: String = "js"
   }
 
+  object Script {
+    implicit val scriptEncoder: Encoder[Script] =
+      encodeAsset.asInstanceOf[Encoder[Script]]
+  }
+
   final case class Stylesheet(name: String) extends Asset {
     override val extension: String = "css"
+  }
+
+  object Stylesheet {
+    implicit val stylesheetEncoder: Encoder[Stylesheet] =
+      encodeAsset.asInstanceOf[Encoder[Stylesheet]]
   }
 
   implicit val showBuild: Show[Asset] = (asset: Asset) =>
@@ -48,6 +71,8 @@ case class AssetBundle(
 }
 
 object AssetBundle {
+  implicit val assetBundleEncoder: Encoder[AssetBundle] = deriveEncoder
+
   implicit val showAssetBundle: Show[AssetBundle] =
     Show.fromToString[AssetBundle]
 

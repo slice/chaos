@@ -48,6 +48,8 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
         DiscordPublisher[F](Webhook(id, token), httpClient).publish
       case StdoutPublisherSetting(format, _) =>
         StdoutPublisher[F](format).publish
+      case WebhookPublisherSetting(uri, _) =>
+        WebhookPublisher[F](uri, httpClient).publish
     }
 
     new Publisher[F] {

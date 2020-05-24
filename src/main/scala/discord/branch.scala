@@ -1,7 +1,7 @@
 package zone.slice.chaos
 package discord
 
-import io.circe.{Decoder, DecodingFailure}
+import io.circe._
 import cats.Show
 import org.http4s.Uri
 import org.http4s.implicits._
@@ -50,6 +50,12 @@ object Branch {
   val all: Set[Branch] = Set(Stable, PTB, Canary)
 
   implicit val showBranch: Show[Branch] = Show.fromToString[Branch]
+
+  implicit val encodeBranch: Encoder[Branch] = Encoder.instance {
+    case Canary => Json.fromString("canary")
+    case PTB => Json.fromString("ptb")
+    case Stable => Json.fromString("stable")
+  }
 
   implicit val decodeBranch: Decoder[Branch] = Decoder.instance { cursor =>
     cursor.as[String].flatMap {
