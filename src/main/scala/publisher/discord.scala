@@ -8,24 +8,18 @@ import cats.implicits._
 import cats.data.Kleisli
 import cats.effect.Sync
 import io.chrisdavenport.log4cats.Logger
-import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import org.http4s.Method._
 import org.http4s.circe._
 import org.http4s.client.Client
-import org.http4s.client.dsl.Http4sClientDsl
 import io.circe._
 import io.circe.literal._
 
 import java.time.Instant
 
 case class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
-    extends Publisher[F]
-    with Http4sClientDsl[F] {
+    extends HTTPPublisher[F] {
 
   protected val arrow: String = "\u21a9\ufe0f"
-
-  protected implicit def unsafeLogger: Logger[F] =
-    Slf4jLogger.getLogger[F]
 
   protected def assetList(assets: Vector[Asset]): Vector[String] =
     assets.map(asset => s"[`${asset.filename}`](${asset.uri})")
