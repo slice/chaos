@@ -34,40 +34,46 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
   protected val executionContext: ExecutionContext =
     ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
 
-  /** Creates a [[Publisher]] from a [[PublisherSetting]].
+  /**
+    * Creates a [[Publisher]] from a [[PublisherSetting]].
     *
     * A [[PublisherSetting]] merely acts as a thin "configuration" object for
     * an actual [[Publisher]].
     */
   private[chaos] def buildPublisher(
       setting: PublisherSetting,
-      source: Source[F, Build],
-  )(implicit httpClient: Client[F], limiter: Limiter[F]): Publisher[F] = {
-    val innerPublish = setting match {
+  )(implicit httpClient: Client[F]): Publisher[F] =
+    setting match {
       case DiscordPublisherSetting(id, token, _) =>
-        DiscordPublisher[F](Webhook(id, token), httpClient).publish
+        DiscordPublisher[F](Webhook(id, token), httpClient)
       case StdoutPublisherSetting(format, _) =>
-        StdoutPublisher[F](format).publish
+        StdoutPublisher[F](format)
       case WebhookPublisherSetting(uri, _) =>
-        WebhookPublisher[F](uri, httpClient).publish
+        WebhookPublisher[F](uri, httpClient)
+    }
+
+  /**
+    * Wraps a [[Publisher]] so that it becomes a no-op for builds outside of a
+    * certain source and wraps publishes in a limiter.
+    */
+  private[chaos] def wrapPublisher(
+      publisher: Publisher[F],
+      source: Source[F, Build],
+  )(implicit limiter: Limiter[F]): Publisher[F] = {
+    val wrappedPublish: Kleisli[F, Deploy, Unit] = Kleisli { (deploy: Deploy) =>
+      val applicable = deploy.build match {
+        case build: HostBuild
+            if (build.branch, build.branch) == source.variant =>
+          true
+        case build: FrontendBuild if build.branch == source.variant => true
+        case _                                                      => false
+      }
+      val submit = limiter.submit(publisher.publish(deploy), 1)
+      (L.info(show"Enqueueing publish for $deploy") >> submit).whenA(applicable)
     }
 
     new Publisher[F] {
-      override val publish: Kleisli[F, Deploy, Unit] = Kleisli {
-        (deploy: Deploy) =>
-          val isApplicable = deploy.build match {
-            case HostBuild(branch, platform, _, _, _)
-                if (branch, platform) == source.variant =>
-              true
-            case FrontendBuild(branch, _, _, _) if branch == source.variant =>
-              true
-            case _ => false
-          }
-          (L.info(show"Enqueueing publish for $deploy") *> limiter.submit(
-            innerPublish(deploy),
-            1,
-          )).whenA(isApplicable)
-      }
+      override val publish = wrappedPublish
     }
   }
 
@@ -124,7 +130,7 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
       selector       <- setting.scrape
       selectedSource <- selectSource(selector)
     } yield (
-      buildPublisher(setting, selectedSource.source),
+      wrapPublisher(buildPublisher(setting), selectedSource.source),
       selectedSource,
     )).toSet
 
