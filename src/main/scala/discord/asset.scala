@@ -28,7 +28,7 @@ sealed trait Asset {
 }
 
 object Asset {
-  implicit val encodeAsset: Encoder[Asset] = Encoder.instance { asset =>
+  implicit val assetEncoder: Encoder[Asset] = Encoder.instance { asset =>
     json"""
     {
       "name": ${asset.name},
@@ -44,7 +44,7 @@ object Asset {
 
   object Script {
     implicit val scriptEncoder: Encoder[Script] =
-      encodeAsset.asInstanceOf[Encoder[Script]]
+      assetEncoder.narrow[Script]
   }
 
   final case class Stylesheet(name: String) extends Asset {
@@ -53,7 +53,7 @@ object Asset {
 
   object Stylesheet {
     implicit val stylesheetEncoder: Encoder[Stylesheet] =
-      encodeAsset.asInstanceOf[Encoder[Stylesheet]]
+      assetEncoder.narrow[Stylesheet]
   }
 
   implicit val showBuild: Show[Asset] = (asset: Asset) =>
