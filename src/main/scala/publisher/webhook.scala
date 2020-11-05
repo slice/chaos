@@ -5,7 +5,6 @@ import discord._
 import source.Headers
 
 import cats.implicits._
-import cats.data.Kleisli
 import cats.effect.Sync
 import org.http4s.circe._
 import org.http4s.Uri
@@ -23,7 +22,7 @@ case class WebhookPublisher[F[_]: Sync](endpoint: Uri, httpClient: Client[F])
       case build: FrontendBuild => json"""{"type": "fe", "build": $build}"""
     }
 
-  override val publish = Kleisli { deploy =>
+  override def publish(deploy: Deploy): F[Unit] =
     for {
       _ <- Logger[F].info(
         show"Submitting ${deploy.build.branch} to webhook at ${endpoint.renderString}",
@@ -31,5 +30,4 @@ case class WebhookPublisher[F[_]: Sync](endpoint: Uri, httpClient: Client[F])
       request = POST(deployJson(deploy), endpoint, Headers.userAgentHeader)
       _ <- httpClient.expect[Unit](request)
     } yield ()
-  }
 }

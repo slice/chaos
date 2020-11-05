@@ -10,8 +10,6 @@ import source.discord._
 import java.nio.file._
 import java.util.concurrent.Executors
 
-import cats.{Monoid, InvariantMonoidal}
-import cats.data.Kleisli
 import cats.effect._
 import cats.implicits._
 import fs2.Stream
@@ -54,26 +52,25 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
 
   /**
     * Wraps a [[Publisher]] so that it becomes a no-op for builds outside of a
-    * certain source and wraps publishes in a limiter.
+    * certain source and becomes ratelimited.
     */
   private[chaos] def wrapPublisher(
       publisher: Publisher[F],
       source: Source[F, Build],
   )(implicit limiter: Limiter[F]): Publisher[F] = {
-    val wrappedPublish: Kleisli[F, Deploy, Unit] = Kleisli { (deploy: Deploy) =>
-      val applicable = deploy.build match {
-        case build: HostBuild
-            if (build.branch, build.branch) == source.variant =>
-          true
-        case build: FrontendBuild if build.branch == source.variant => true
-        case _                                                      => false
-      }
-      val submit = limiter.submit(publisher.publish(deploy), 1)
-      (L.info(show"Enqueueing publish for $deploy") >> submit).whenA(applicable)
-    }
-
     new Publisher[F] {
-      override val publish = wrappedPublish
+      override def publish(deploy: Deploy): F[Unit] = {
+        val applicable = deploy.build match {
+          case build: HostBuild
+              if (build.branch, build.branch) == source.variant =>
+            true
+          case build: FrontendBuild if build.branch == source.variant => true
+          case _                                                      => false
+        }
+        val submit = limiter.submit(publisher.publish(deploy), 1)
+        (L.info(show"Enqueueing publish for $deploy") >> submit)
+          .whenA(applicable)
+      }
     }
   }
 
@@ -162,9 +159,7 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
               case _ -> Right(Poll(build, prev)) =>
                 val isRevert = prev.exists(build.number < _.number)
                 val deploy   = Deploy(build, isRevert)
-                implicit val monoidFUnit: Monoid[F[Unit]] =
-                  InvariantMonoidal.monoid[F, Unit]
-                publishers.toVector.combineAll.publish(deploy)
+                publishers.toVector.traverse(_.publish(deploy))
             }
           }
           .scan(initialState) {

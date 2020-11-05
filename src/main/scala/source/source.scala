@@ -137,4 +137,4 @@ object Source {
   * only together in a case class. This is useful when you need to persist the
   * selector string alongside the source.
   */
-case class SelectedSource[F[+_], B](selector: String, source: Source[F, B])
+case class SelectedSource[F[+_], +B](selector: String, source: Source[F, B])

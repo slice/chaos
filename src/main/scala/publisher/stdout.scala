@@ -3,7 +3,6 @@ package publisher
 
 import discord._
 
-import cats.data.Kleisli
 import cats.effect.Sync
 
 case class StdoutPublisher[F[_]: Sync](format: String) extends Publisher[F] {
@@ -36,7 +35,7 @@ case class StdoutPublisher[F[_]: Sync](format: String) extends Publisher[F] {
     ) ++ buildProperties
   }
 
-  override val publish = Kleisli { deploy =>
+  override def publish(deploy: Deploy): F[Unit] = {
     val message = replacers(deploy).foldLeft(format) { (format, mapping) =>
       format.replace(s"$$${mapping._1}", mapping._2)
     }
