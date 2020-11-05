@@ -1,17 +1,26 @@
 *.chaos
 /application.*
 
+# Compiled files
 target
 *.class
 
+# Intellij IDEA
 *.iml
 *.ipr
 *.iws
 .idea
 out
 
+# VS Code
+/.vscode
+
+# BSP, Bloop, Metals, etc.
+/.bsp
 /.bloop
 /.metals
-project/metals.sbt
+/project/metals.sbt
+/project/project
+/project/.bloop
 
 .DS_Store
