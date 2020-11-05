@@ -36,7 +36,7 @@ case class Poll[B](build: B, previous: Option[B])
   * @param F the effect type
   * @param B the build type
   */
-abstract class Source[F[+_], +B] {
+abstract class Source[F[+_], +B] { self =>
 
   /** The variant type. */
   type V
@@ -114,21 +114,21 @@ abstract class Source[F[+_], +B] {
       case that: Source[F, B] => that.variant == variant
       case _                  => false
     }
+
+  def limited(limiter: Limiter[F])(
+      priority: Int = 0,
+  )(implicit C: Concurrent[F]) = {
+    new Source[F, B] {
+      type V = self.V
+      def variant = self.variant
+      def build   = Limiter.await[F, B](self.build, priority)(C, limiter)
+    }
+  }
 }
 
 object Source {
   implicit def eqSource[F[+_], B]: Eq[Source[F, B]] =
     Eq.fromUniversalEquals
-
-  def limited[F[+_]: Concurrent: Limiter, B](
-      source: Source[F, B],
-      priority: Int = 0,
-  ) =
-    new Source[F, B] {
-      type V = source.V
-      def variant = source.variant
-      def build   = Limiter.await[F, B](source.build, priority)
-    }
 }
 
 /** A case class containing both a selector string and the selected source.

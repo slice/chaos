@@ -22,15 +22,14 @@ import org.http4s.client.blaze.BlazeClientBuilder
 
 import scala.concurrent.ExecutionContext
 
-class Poller[F[+_]: Timer: ContextShift] private[chaos] (
-    config: Config,
+class Poller[F[+_]: Timer: ContextShift] private[chaos] (config: Config)(
+    httpClient: Client[F],
+    limiter: Limiter[F],
     blocker: Blocker,
 )(implicit
     F: ConcurrentEffect[F],
     L: Logger[F],
 ) {
-  protected val executionContext: ExecutionContext =
-    ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
 
   /**
     * Creates a [[Publisher]] from a [[PublisherSetting]].
@@ -40,7 +39,7 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
     */
   private[chaos] def buildPublisher(
       setting: PublisherSetting,
-  )(implicit httpClient: Client[F]): Publisher[F] =
+  ): Publisher[F] =
     setting match {
       case DiscordPublisherSetting(id, token, _) =>
         DiscordPublisher[F](Webhook(id, token), httpClient)
@@ -57,7 +56,7 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
   private[chaos] def wrapPublisher(
       publisher: Publisher[F],
       source: Source[F, Build],
-  )(implicit limiter: Limiter[F]): Publisher[F] = {
+  ): Publisher[F] = {
     new Publisher[F] {
       override def publish(deploy: Deploy): F[Unit] = {
         val applicable = deploy.build match {
@@ -77,7 +76,7 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
   /** Resolve a source selector string into a set of selected [[Source]]s. */
   def selectSource(
       selector: String,
-  )(implicit httpClient: Client[F]): Set[SelectedSource[F, Build]] = {
+  ): Set[SelectedSource[F, Build]] = {
     selector match {
       case s"fe:$selector" =>
         val branch = Select[Branch].multiselect(selector)
@@ -118,10 +117,7 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
   /** Polls and publishes builds from all sources forever, persisting the last
     * known build in the state file.
     */
-  def poller(implicit
-      httpClient: Client[F],
-      LM: Limiter[F],
-  ): F[Unit] = {
+  def run: F[Unit] = {
     val mapped: Set[(Publisher[F], SelectedSource[F, Build])] = (for {
       setting        <- config.publishers
       selector       <- setting.scrape
@@ -146,8 +142,8 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
           .map {
             case selectedSource @ SelectedSource(selector, source) =>
               val initialBuild = initialState.get(selector).map(fakeBuild(_))
-              Source
-                .limited(source)
+              source
+                .limited(limiter)(0)
                 .poll(config.interval, initialBuild)
                 .map((selectedSource, _))
           }
@@ -174,21 +170,6 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (
       _ <- go.compile.drain
     } yield ()
   }
-
-  /** Starts this poller and runs it forever. */
-  def run: F[Unit] = {
-    val resources = for {
-      httpClient <- BlazeClientBuilder[F](executionContext).resource
-      limiter    <- Limiter.start[F](1 every config.requestRatelimit)
-    } yield {
-      (FollowRedirect(5)(httpClient), limiter)
-    }
-
-    resources.use {
-      case (implicit0(httpClient: Client[F]), implicit0(limiter: Limiter[F])) =>
-        poller
-    }
-  }
 }
 
 object Poller {
@@ -196,6 +177,20 @@ object Poller {
   /** Creates a new poller and runs it forever. */
   def apply[F[+_]: ConcurrentEffect: Timer: Logger: ContextShift](
       config: Config,
-  ): F[Unit] =
-    Blocker[F].use { blocker => new Poller[F](config, blocker).run }
+  ): F[Unit] = {
+    val executionContext: ExecutionContext =
+      ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
+
+    val resource = for {
+      blocker    <- Blocker[F]
+      httpClient <- BlazeClientBuilder[F](executionContext).resource
+      limiter    <- Limiter.start[F](1 every config.requestRatelimit)
+    } yield new Poller[F](config)(
+      FollowRedirect(5)(httpClient),
+      limiter,
+      blocker,
+    )
+
+    resource.use(_.run)
+  }
 }
