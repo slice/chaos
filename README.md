@@ -2,8 +2,9 @@
 
 [![Build Status](https://github.com/slice/chaos/workflows/tests/badge.svg)](https://github.com/slice/chaos/actions?query=workflow%3Atests)
 
-chaos is a purely functional Discord build scraper written in [Scala]. It
-leverages [cats], [cats-effect], [fs2], and [http4s].
+chaos is a purely functional Discord build scraper written in [Scala],
+leveraging [cats], [cats-effect], [fs2], and [http4s]. It aims to be correct and
+highly flexible.
 
 [cats]: https://typelevel.org/cats
 [cats-effect]: https://typelevel.org/cats-effect
@@ -28,8 +29,8 @@ $ git clone https://github.com/slice/chaos.git && cd chaos
 $ sbt assembly
 ```
 
-This will compile a so-called "fat" JAR file that contains all of the program
-bytecode and external dependencies.
+This will compile a self-contained JAR file that contains all of the program
+bytecode and dependencies.
 
 ## Operation
 
@@ -333,7 +334,8 @@ Variants, in order from least stable to most stable:
 client that enables a multitude additional features. In other words, it's the
 desktop application.
 
-This source makes requests to `https://discordapp.com/api/updates/$BRANCH?platform=$PLATFORM`.
+This source makes requests to
+`https://discordapp.com/api/updates/$BRANCH?platform=$PLATFORM`.
 
 The variant is specified as a platform and a branch, separated by a dash. See
 the `fe` source for all branches.
@@ -388,10 +390,10 @@ the `fe` source.
 ### "variant"
 
 A variant associated with a source. Usually, the purpose of a variant is to
-narrow down the builds emitted from a source, ultimately determining the
-variant of builds emitted from that source. For example, the Discord frontend
-source (`fe`) has a variant for each branch, so the poller knows which branch
-to make requests to.
+narrow down the builds emitted from a source, ultimately determining the variant
+of builds emitted from that source. For example, the Discord frontend source
+(`fe`) has a variant for each branch, so the poller knows which branch to make
+requests to.
 
 ### "publisher"
 
