@@ -278,7 +278,7 @@ Prints new builds to `stdout` through a format string. Available variables:
   <tr>
     <td><code>$platform</code></td>
     <td>The platform for this host build. Either <code>Windows</code>,
-    <code>Mac</code>, or <code>Linux.</code></td>
+    <code>Mac</code>, or <code>Linux</code>.</td>
   </tr>
 
   <tr>
