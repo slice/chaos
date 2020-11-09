@@ -27,16 +27,16 @@ object State {
       path: Path,
       blocker: Blocker,
   ): F[Option[Store]] = {
-    file.exists(blocker, path).flatMap { exists =>
-      if (exists)
+    file
+      .exists(blocker, path)
+      .ifM(
         file
           .readAll[F](path, blocker, 1024)
           .through(text.utf8Decode)
           .compile
           .string
-          .map(decode(_).some)
-      else
-        Sync[F].pure(none)
-    }
+          .map(decode(_).some),
+        none.pure[F],
+      )
   }
 }
