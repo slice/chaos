@@ -1,6 +1,8 @@
 package zone.slice.chaos
 package discord
 
+import poller.Select
+
 import io.circe._
 import cats.Show
 import org.http4s.Uri
@@ -53,7 +55,7 @@ object Branch {
 
   implicit val encodeBranch: Encoder[Branch] = Encoder.instance {
     case Canary => Json.fromString("canary")
-    case PTB => Json.fromString("ptb")
+    case PTB    => Json.fromString("ptb")
     case Stable => Json.fromString("stable")
   }
 
@@ -65,5 +67,21 @@ object Branch {
       case other =>
         Left(DecodingFailure(s"$other is not a Discord branch", cursor.history))
     }
+  }
+
+  implicit val selectBranch: Select[Branch] = new Select[Branch] {
+    def all: Map[String, Branch] =
+      Map(
+        "stable" -> Branch.Stable,
+        "ptb"    -> Branch.PTB,
+        "canary" -> Branch.Canary,
+      )
+
+    override def aliases: Map[String, String] =
+      Map(
+        "s" -> "stable",
+        "p" -> "ptb",
+        "c" -> "canary",
+      )
   }
 }

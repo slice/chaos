@@ -1,8 +1,6 @@
 package zone.slice.chaos
 package poller
 
-import discord.Branch
-
 /** An item that was selected, alongside a normalized selector to select it. */
 case class Selected[A](item: A, normalizedSelector: String)
 
@@ -59,20 +57,4 @@ trait Select[A] {
 
 object Select {
   def apply[A](implicit ev: Select[A]): Select[A] = ev
-
-  implicit val selectBranch: Select[Branch] = new Select[Branch] {
-    def all: Map[String, Branch] =
-      Map(
-        "stable" -> Branch.Stable,
-        "ptb"    -> Branch.PTB,
-        "canary" -> Branch.Canary,
-      )
-
-    override def aliases: Map[String, String] =
-      Map(
-        "s" -> "stable",
-        "p" -> "ptb",
-        "c" -> "canary",
-      )
-  }
 }
