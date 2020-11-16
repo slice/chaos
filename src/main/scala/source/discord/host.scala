@@ -14,7 +14,7 @@ import org.http4s.{Request, Uri}
 import org.http4s.circe.jsonOf
 import org.http4s.client.Client
 
-case class HostSource[F[+_]: Sync](
+case class HostSource[F[_]: Sync](
     val branch: Branch,
     val platform: Platform,
     val httpClient: Client[F],
@@ -39,7 +39,7 @@ case class HostSource[F[+_]: Sync](
 
   implicit def hostBuildDecoder = jsonOf[F, HostBuild]
 
-  def build: F[HostBuild] = {
+  def build[A >: HostBuild]: F[A] = {
     for {
       _ <- Logger[F].debug(show"Fetching host updates for $branch on $platform")
       request = Request[F](uri = updatesUri, headers = Headers.headers)

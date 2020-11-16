@@ -18,7 +18,7 @@ import scala.util.matching._
   *
   * @param scraper the scraper
   */
-case class FrontendSource[F[+_]](
+case class FrontendSource[F[_]](
     val variant: Branch,
     val httpClient: Client[F],
 )(implicit
@@ -83,7 +83,7 @@ case class FrontendSource[F[+_]](
     * This takes care of downloading the branch's HTML, finding
     * [[discord.Asset]]s, extracting the build number, etc.
     */
-  def build: F[FrontendBuild] = {
+  def build[A >: FrontendBuild]: F[A] = {
     for {
       pageText    <- fetchClient(variant)
       assetBundle <- extractAssets(pageText)

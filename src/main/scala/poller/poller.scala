@@ -22,7 +22,7 @@ import org.http4s.client.blaze.BlazeClientBuilder
 
 import scala.concurrent.ExecutionContext
 
-class Poller[F[+_]: Timer: ContextShift] private[chaos] (config: Config)(
+class Poller[F[_]: Timer: ContextShift] private[chaos] (config: Config)(
     httpClient: Client[F],
     limiter: Limiter[F],
     blocker: Blocker,
@@ -175,7 +175,7 @@ class Poller[F[+_]: Timer: ContextShift] private[chaos] (config: Config)(
 object Poller {
 
   /** Creates a new poller and runs it forever. */
-  def apply[F[+_]: ConcurrentEffect: Timer: Logger: ContextShift](
+  def apply[F[_]: ConcurrentEffect: Timer: Logger: ContextShift](
       config: Config,
   ): F[Unit] = {
     val executionContext: ExecutionContext =

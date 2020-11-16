@@ -36,7 +36,7 @@ case class Poll[B](build: B, previous: Option[B])
   * @param F the effect type
   * @param B the build type
   */
-abstract class Source[F[+_], +B] { self =>
+abstract class Source[F[_], +B] { self =>
 
   /** The variant type. */
   type V
@@ -45,7 +45,7 @@ abstract class Source[F[+_], +B] { self =>
   def variant: V
 
   /** A single build. */
-  def build: F[B]
+  def build[A >: B]: F[A]
 
   /** The stream of builds. */
   def builds: Stream[F, B] = Stream.repeatEval(build)
@@ -120,14 +120,14 @@ abstract class Source[F[+_], +B] { self =>
   )(implicit C: Concurrent[F]) = {
     new Source[F, B] {
       type V = self.V
-      def variant = self.variant
-      def build   = Limiter.await[F, B](self.build, priority)(C, limiter)
+      def variant       = self.variant
+      def build[A >: B] = Limiter.await[F, A](self.build, priority)(C, limiter)
     }
   }
 }
 
 object Source {
-  implicit def eqSource[F[+_], B]: Eq[Source[F, B]] =
+  implicit def eqSource[F[_], B]: Eq[Source[F, B]] =
     Eq.fromUniversalEquals
 }
 
@@ -137,4 +137,4 @@ object Source {
   * only together in a case class. This is useful when you need to persist the
   * selector string alongside the source.
   */
-case class SelectedSource[F[+_], +B](selector: String, source: Source[F, B])
+case class SelectedSource[F[_], +B](selector: String, source: Source[F, B])
