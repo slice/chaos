@@ -140,3 +140,41 @@ object HostBuild {
       )
   }
 }
+
+final case class CourgetteBuild(
+    branch: Branch,
+    platform: Platform,
+    arch: Arch,
+    hostVersion: List[Int],
+    hash: String,
+    url: String,
+) extends Build {
+  def version: String = hostVersion.map(_.toString).mkString(".")
+
+  // TODO: This is bad. Let's have a proper "version" type instead.
+  def number: Int = hostVersion.sum
+}
+
+object CourgetteBuild {
+  implicit val showCourgetteBuild: Show[HostBuild] = Show.fromToString
+
+  implicit val config: Configuration =
+    Configuration.default.withSnakeCaseMemberNames
+
+  implicit val encodeCourgetteBuild: Encoder[CourgetteBuild] =
+    deriveConfiguredEncoder
+
+  def decoder(
+      branch: Branch,
+      platform: Platform,
+      arch: Arch,
+  ): Decoder[CourgetteBuild] =
+    Decoder.instance { cursor =>
+      val full = cursor.downField("full")
+      for {
+        hostVersion <- full.get[List[Int]]("host_version")
+        hash        <- full.get[String]("package_sha256")
+        url         <- full.get[String]("url")
+      } yield CourgetteBuild(branch, platform, arch, hostVersion, hash, url)
+    }
+}

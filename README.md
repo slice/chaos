@@ -353,6 +353,28 @@ Examples:
 - `host:{mac,linux}-{canary,stable}`: Scrapes Canary and Stable host builds for
   Mac and Linux.
 
+### `courgette`
+
+`courgette` fetches [Courgette] update manifests published for the Discord host.
+
+Update manifests are fetched from
+`https://discord.com/api/updates/distributions/app/manifests/latest?channel=$BRANCH&platform=$PLATFORM&arch=$ARCH`.
+
+Architectures:
+
+- `x86`
+- `x64`
+- `armv7`
+- `armv8`
+
+Examples:
+
+- `courgette:win-canary-x86`: Scrapes Courgette update manifests for x86 Windows
+  on the Canary branch.
+
+[courgette]:
+  https://www.chromium.org/developers/design-documents/software-updates-courgette
+
 ## Heuristics
 
 ### Revert detection

@@ -20,6 +20,8 @@ case class WebhookPublisher[F[_]: Sync](endpoint: Uri, httpClient: Client[F])
     deploy.build match {
       case build: HostBuild     => json"""{"type": "host", "build": $build}"""
       case build: FrontendBuild => json"""{"type": "fe", "build": $build}"""
+      case build: CourgetteBuild =>
+        json"""{"type": "courgette", "build": $build}"""
     }
 
   override def publish(deploy: Deploy): F[Unit] =

@@ -46,6 +46,8 @@ case class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
         embedForFrontendBuild(build, isRevert)
       case Deploy(build: HostBuild, isRevert) =>
         embedForHostBuild(build, isRevert)
+      case Deploy(build: CourgetteBuild, isRevert) =>
+        embedForCourgetteBuild(build, isRevert)
     }) map { embed =>
       json"""
       {
@@ -75,6 +77,27 @@ case class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
         "color": ${build.branch.color},
         "description": $description,
         "url": ${build.uri.renderString},
+        "timestamp": $timestamp
+      }
+      """
+    }
+  }
+
+  protected def embedForCourgetteBuild(
+      build: CourgetteBuild,
+      isRevert: Boolean,
+  ): F[Json] = {
+    val titlePrelude =
+      show"${build.branch} ${build.platform.name} Courgette Host"
+    val title =
+      if (isRevert) show"$titlePrelude reverted to ${build.version}"
+      else show"$titlePrelude ${build.version}"
+    currentTimestamp map { timestamp =>
+      json"""
+      {
+        "title": $title,
+        "color": ${build.branch.color},
+        "url": ${build.url},
         "timestamp": $timestamp
       }
       """

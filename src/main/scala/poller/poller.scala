@@ -64,7 +64,10 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (config: Config)(
               if (build.branch, build.branch) == source.variant =>
             true
           case build: FrontendBuild if build.branch == source.variant => true
-          case _                                                      => false
+          case build: CourgetteBuild
+              if (build.branch, build.platform, build.arch) == source.variant =>
+            true
+          case _ => false
         }
         val submit = limiter.submit(publisher.publish(deploy), 1)
         (L.info(show"Enqueueing publish for $deploy") >> submit)
@@ -87,6 +90,21 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (config: Config)(
               FrontendSource[F](branch, httpClient),
             )
         })
+      case s"courgette:$platformS-$branchS-$archS" =>
+        val platforms = Select[Platform].multiselect(platformS)
+        val branches  = Select[Branch].multiselect(branchS)
+        val arches    = Select[Arch].multiselect(archS)
+
+        for (
+          Selected(plat, platSelector)     <- platforms;
+          Selected(branch, branchSelector) <- branches;
+          Selected(arch, archSelector)     <- arches
+        ) yield {
+          SelectedSource(
+            s"courgette:$platSelector-$branchSelector-$archSelector",
+            CourgetteSource[F](branch, plat, arch, httpClient),
+          )
+        }
       case s"host:$platformSelector-$branchSelector" =>
         val platforms = Select[Platform].multiselect(platformSelector)
         val branches  = Select[Branch].multiselect(branchSelector)

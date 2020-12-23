@@ -25,6 +25,13 @@ case class StdoutPublisher[F[_]: Sync](format: String) extends Publisher[F] {
           "url"      -> build.uri.renderString,
           "notes"    -> build.notes.getOrElse("<none>"),
         )
+      case build: CourgetteBuild =>
+        Map(
+          "platform" -> build.platform.toString,
+          "arch"     -> build.arch.toString,
+          "hash"     -> build.hash,
+          "url"      -> build.url,
+        )
     }
 
     Map(
