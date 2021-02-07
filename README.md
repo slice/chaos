@@ -88,7 +88,7 @@ publishers: [
   # Let's also output _all_ new frontend builds to `stdout` for good measure:
   {
     type: "stdout"
-    format: "o/ Detected a new build for $branch! (build number: $build_number)"
+    format: "o/ Detected a new build for $branch! (build number: $number)"
 
     # For this publisher, we care about all frontend branches:
     scrape: ["fe:*"]
@@ -213,7 +213,7 @@ Publishes new builds to a webhook as JSON.
 ```yaml
 {
   type: "stdout"
-  format: "Hey, there's a new build for $branch! (build number: $build_number)"
+  format: "Hey, there's a new build for $branch! (build number: $number)"
 }
 ```
 
