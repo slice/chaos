@@ -10,6 +10,8 @@ import source.discord._
 import java.nio.file._
 import java.util.concurrent.Executors
 
+import cats.Order
+import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
 import fs2.Stream
@@ -20,6 +22,7 @@ import org.http4s.client.Client
 import org.http4s.client.middleware.FollowRedirect
 import org.http4s.client.blaze.BlazeClientBuilder
 
+import scala.collection.immutable.SortedMap
 import scala.concurrent.ExecutionContext
 
 class Poller[F[_]: Timer: ContextShift] private[chaos] (config: Config)(
@@ -50,29 +53,18 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (config: Config)(
     }
 
   /**
-    * Wraps a [[Publisher]] so that it becomes a no-op for builds outside of a
-    * certain source and becomes ratelimited.
+    * Ratelimits a [[Publisher]] so it can't publish too quickly.
     */
-  private[chaos] def wrapPublisher(
+  private[chaos] def limitPublisher(
       publisher: Publisher[F],
-      source: Source[F, Build],
   ): Publisher[F] = {
     new Publisher[F] {
       override def publish(deploy: Deploy): F[Unit] = {
-        val applicable = deploy.build match {
-          case build: HostBuild
-              if (build.branch, build.branch) == source.variant =>
-            true
-          case build: FrontendBuild if build.branch == source.variant => true
-          case build: CourgetteBuild
-              if (build.branch, build.platform, build.arch) == source.variant =>
-            true
-          case _ => false
-        }
         val submit = limiter.submit(publisher.publish(deploy), 1)
-        (L.info(show"Enqueueing publish for $deploy") >> submit)
-          .whenA(applicable)
+        L.info(show"Enqueueing publish for $deploy") >> submit
       }
+
+      override def toString: String = s"Limited($publisher)"
     }
   }
 
@@ -136,19 +128,43 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (config: Config)(
     * known build in the state file.
     */
   def run: F[Unit] = {
-    val mapped: Set[(Publisher[F], SelectedSource[F, Build])] = (for {
-      setting        <- config.publishers
-      selector       <- setting.scrape
-      selectedSource <- selectSource(selector)
-    } yield (
-      wrapPublisher(buildPublisher(setting), selectedSource.source),
-      selectedSource,
-    )).toSet
+    // Construct a sequence of each publisher and the sources it needs.
+    // Publishers which publish from multiple sources are duplicated for each
+    // source.
+    val duplicatedMapping: List[(Publisher[F], SelectedSource[F, Build])] =
+      for {
+        setting        <- config.publishers
+        selector       <- setting.scrape
+        selectedSource <- selectSource(selector)
+      } yield (
+        (buildPublisher _ andThen limitPublisher _)(setting),
+        selectedSource,
+      )
 
-    val publishers = mapped.map(_._1)
-    val sources    = mapped.map(_._2)
+    // It'd normally be logically impossible to order sources, but luckily we
+    // have the selector here.
+    implicit val selectedSourceOrder: Order[SelectedSource[F, Build]] =
+      Order.by(_.selector)
+
+    // Go from a duplicated publisher to source mapping to a source to
+    // publishers mapping.
+    val groupedMapping
+        : SortedMap[SelectedSource[F, Build], NonEmptyList[Publisher[F]]] =
+      duplicatedMapping.groupByNel(_._2).fmap(_.fmap(_._1))
 
     for {
+      _ <- groupedMapping.toVector.traverse {
+        case (selectedSource, publishers) =>
+          val plural = if (publishers.size == 1) "" else "s"
+          val heading = s"""[Mapping] Source "${selectedSource.selector}"
+                           | is being consumed by ${publishers.size}
+                           | publisher$plural:""".stripMargin
+            .replaceAll("\n", "")
+          L.info(heading) >> publishers.traverse { publisher =>
+            L.info(s"[Mapping]     $publisher")
+          }
+      }
+
       initialState <-
         State
           .read(stateFilePath, blocker)
@@ -156,26 +172,29 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (config: Config)(
 
       go =
         Stream
-          .emits(sources.toVector)
+          .emits(groupedMapping.toVector)
           .map {
-            case selectedSource @ SelectedSource(selector, source) =>
+            case (
+                  selectedSource @ SelectedSource(selector, source),
+                  publishers,
+                ) =>
               val initialBuild = initialState.get(selector).map(fakeBuild(_))
               source
                 .limited(limiter)(0)
                 .poll(config.interval, initialBuild)
+                .evalTap {
+                  case Left(error) =>
+                    L.error(error)(s"Failed to scrape from $selectedSource")
+                  case Right(Poll(build, prev)) =>
+                    val isRevert = prev.exists(build.number < _.number)
+                    val deploy   = Deploy(build, isRevert)
+                    publishers.traverse(_.publish(deploy))
+                }
+                // Annotate poll objects with the source they came from so we
+                // can update the state file.
                 .map((selectedSource, _))
           }
           .parJoinUnbounded
-          .evalTap { item =>
-            item match {
-              case source -> Left(error) =>
-                L.error(error)(s"Failed to scrape from $source")
-              case _ -> Right(Poll(build, prev)) =>
-                val isRevert = prev.exists(build.number < _.number)
-                val deploy   = Deploy(build, isRevert)
-                publishers.toVector.traverse(_.publish(deploy))
-            }
-          }
           .scan(initialState) {
             case (acc, selectedSource -> Right(Poll(build, _))) =>
               acc + (selectedSource.selector -> build.version)
@@ -184,7 +203,6 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (config: Config)(
           .map(State.encode)
           .through(continuouslyOverwrite(blocker, stateFilePath))
 
-      _ <- L.info(s"Scraping ${sources.size} source(s): $mapped")
       _ <- go.compile.drain
     } yield ()
   }
