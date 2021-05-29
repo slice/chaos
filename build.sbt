@@ -69,7 +69,6 @@ lazy val chaos = (project in file("."))
     // A workaround for some type inference issues.
     // See: https://github.com/mockito/mockito-scala/issues/29
     Test / scalacOptions -= "-Wdead-code",
-    reStart / javaOptions += "-Dconfig.file=./application.conf",
     addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
     // Fork when running because we spawn threads.
     run / fork := true,
