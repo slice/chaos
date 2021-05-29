@@ -4,7 +4,7 @@ inThisBuild(
     organizationHomepage := Some(url("https://slice.zone")),
     homepage := Some(url("https://github.com/slice/chaos")),
     description := "a purely functional discord build scraper",
-    scalaVersion := "2.13.2",
+    scalaVersion := "2.13.6",
     version := "0.0.0",
     startYear := Some(2020),
     developers := List(
