@@ -5,8 +5,8 @@ import discord._
 import source.Headers
 
 import cats.implicits._
-import cats.effect.Sync
-import io.chrisdavenport.log4cats.Logger
+import cats.effect.Async
+import org.typelevel.log4cats.Logger
 import org.http4s.Method._
 import org.http4s.circe._
 import org.http4s.client.Client
@@ -15,8 +15,10 @@ import io.circe.literal._
 
 import java.time.Instant
 
-case class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
-    extends HTTPPublisher[F] {
+case class DiscordPublisher[F[_]: Async](
+    webhook: Webhook,
+    httpClient: Client[F],
+) extends HTTPPublisher[F] {
 
   protected val arrow: String = "\u21a9\ufe0f"
 
@@ -24,7 +26,7 @@ case class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
     assets.map(asset => s"[`${asset.filename}`](${asset.uri})")
 
   private def currentTimestamp: F[String] =
-    Sync[F].delay {
+    Async[F].delay {
       Instant.now().toString
     }
 
@@ -34,8 +36,8 @@ case class DiscordPublisher[F[_]: Sync](webhook: Webhook, httpClient: Client[F])
     if (scripts.size == assumedNames.size) {
       // Only attempt to label each script if we get the expected amount of
       // scripts.
-      scripts.zip(assumedNames).map {
-        case (link, name) => s"$link ($name)"
+      scripts.zip(assumedNames).map { case (link, name) =>
+        s"$link ($name)"
       }
     } else scripts
   }

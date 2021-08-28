@@ -31,8 +31,8 @@ trait Select[A] {
       .orElse(aliases.get(key).flatMap(all.get))
       .map(Selected(_, key))
 
-  /** Selects a set of items from a selector string, allowing for
-    * multiselection syntax and star globbing.
+  /** Selects a set of items from a selector string, allowing for multiselection
+    * syntax and star globbing.
     */
   def multiselect(selector: String): Set[Selected[A]] =
     selector match {
@@ -45,9 +45,8 @@ trait Select[A] {
           .flatMap(select)
       case "*" =>
         all
-          .map({
-            case (normalizedSelector, item) =>
-              Selected(item, normalizedSelector)
+          .map({ case (normalizedSelector, item) =>
+            Selected(item, normalizedSelector)
           })
           .toSet
       case _ =>

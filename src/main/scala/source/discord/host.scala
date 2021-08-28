@@ -4,17 +4,17 @@ package discord
 
 import zone.slice.chaos.discord._
 
-import cats.effect.Sync
+import cats.effect.Async
 import cats.implicits._
-import io.chrisdavenport.log4cats.Logger
-import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 import io.circe.generic.extras.Configuration
 import io.circe.generic.extras.auto._
 import org.http4s.{Request, Uri}
 import org.http4s.circe.jsonOf
 import org.http4s.client.Client
 
-case class HostSource[F[_]: Sync](
+case class HostSource[F[_]: Async](
     val branch: Branch,
     val platform: Platform,
     val httpClient: Client[F],

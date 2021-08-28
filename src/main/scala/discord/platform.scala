@@ -11,7 +11,8 @@ import cats._
 sealed trait Platform {
 
   /** The platform identifier; passed as a query argument to the updates
-    * endpoint, like so: `https://discordapp.com/api/v7/updates/canary?platform=win`
+    * endpoint, like so:
+    * `https://discordapp.com/api/v7/updates/canary?platform=win`
     */
   def identifier: String
 

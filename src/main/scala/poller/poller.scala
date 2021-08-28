@@ -17,28 +17,26 @@ import cats.implicits._
 import fs2.Stream
 import upperbound.Limiter
 import upperbound.syntax.rate._
-import io.chrisdavenport.log4cats.Logger
+import org.typelevel.log4cats.Logger
 import org.http4s.client.Client
 import org.http4s.client.middleware.FollowRedirect
-import org.http4s.client.blaze.BlazeClientBuilder
+import org.http4s.blaze.client.BlazeClientBuilder
 
 import scala.collection.immutable.SortedMap
 import scala.concurrent.ExecutionContext
 
-class Poller[F[_]: Timer: ContextShift] private[chaos] (config: Config)(
+class Poller[F[_]] private[chaos] (config: Config)(
     httpClient: Client[F],
     limiter: Limiter[F],
-    blocker: Blocker,
 )(implicit
-    F: ConcurrentEffect[F],
+    F: Async[F],
     L: Logger[F],
 ) {
 
-  /**
-    * Creates a [[Publisher]] from a [[PublisherSetting]].
+  /** Creates a [[Publisher]] from a [[PublisherSetting]].
     *
-    * A [[PublisherSetting]] merely acts as a thin "configuration" object for
-    * an actual [[Publisher]].
+    * A [[PublisherSetting]] merely acts as a thin "configuration" object for an
+    * actual [[Publisher]].
     */
   private[chaos] def buildPublisher(
       setting: PublisherSetting,
@@ -52,8 +50,7 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (config: Config)(
         WebhookPublisher[F](uri, httpClient)
     }
 
-  /**
-    * Ratelimits a [[Publisher]] so it can't publish too quickly.
+  /** Ratelimits a [[Publisher]] so it can't publish too quickly.
     */
   private[chaos] def limitPublisher(
       publisher: Publisher[F],
@@ -75,12 +72,11 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (config: Config)(
     selector match {
       case s"fe:$selector" =>
         val branch = Select[Branch].multiselect(selector)
-        branch.map({
-          case Selected(branch, normalizedSelector) =>
-            SelectedSource(
-              s"fe:$normalizedSelector",
-              FrontendSource[F](branch, httpClient),
-            )
+        branch.map({ case Selected(branch, normalizedSelector) =>
+          SelectedSource(
+            s"fe:$normalizedSelector",
+            FrontendSource[F](branch, httpClient),
+          )
         })
       case s"courgette:$platformS-$branchS-$archS" =>
         val platforms = Select[Platform].multiselect(platformS)
@@ -118,8 +114,8 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (config: Config)(
 
   /** Create a fake build object.
     *
-    * This is needed in order to load in the versions stored in the state
-    * file, so that pollers don't think that there's always a new build.
+    * This is needed in order to load in the versions stored in the state file,
+    * so that pollers don't think that there's always a new build.
     */
   def fakeBuild(version: String): Build =
     HostBuild(Branch.Stable, Platform.Windows, version, "", none)
@@ -167,7 +163,7 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (config: Config)(
 
       initialState <-
         State
-          .read(stateFilePath, blocker)
+          .read(stateFilePath)
           .map(_.getOrElse(Map[String, String]()))
 
       go =
@@ -188,7 +184,7 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (config: Config)(
                   case Right(Poll(build, prev)) =>
                     val isRevert = prev.exists(build.number < _.number)
                     val deploy   = Deploy(build, isRevert)
-                    publishers.traverse(_.publish(deploy))
+                    publishers.traverse(_.publish(deploy)).void
                 }
                 // Annotate poll objects with the source they came from so we
                 // can update the state file.
@@ -200,8 +196,8 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (config: Config)(
               acc + (selectedSource.selector -> build.version)
             case (acc, _) => acc
           }
-          .map(State.encode)
-          .through(continuouslyOverwrite(blocker, stateFilePath))
+          .map(State.encode(_))
+          .through(continuouslyOverwrite(stateFilePath))
 
       _ <- go.compile.drain
     } yield ()
@@ -211,20 +207,18 @@ class Poller[F[_]: Timer: ContextShift] private[chaos] (config: Config)(
 object Poller {
 
   /** Creates a new poller and runs it forever. */
-  def apply[F[_]: ConcurrentEffect: Timer: Logger: ContextShift](
+  def apply[F[_]: Async: Logger](
       config: Config,
   ): F[Unit] = {
     val executionContext: ExecutionContext =
       ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
 
     val resource = for {
-      blocker    <- Blocker[F]
       httpClient <- BlazeClientBuilder[F](executionContext).resource
       limiter    <- Limiter.start[F](1 every config.requestRatelimit)
     } yield new Poller[F](config)(
       FollowRedirect(5)(httpClient),
       limiter,
-      blocker,
     )
 
     resource.use(_.run)

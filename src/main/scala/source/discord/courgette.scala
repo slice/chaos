@@ -4,16 +4,16 @@ package discord
 
 import zone.slice.chaos.discord._
 
-import cats.effect.Sync
+import cats.effect.Async
 import cats.implicits._
-import io.chrisdavenport.log4cats.Logger
-import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 import org.http4s.{Request, Uri, Query}
 import org.http4s.implicits._
 import org.http4s.circe.jsonOf
 import org.http4s.client.Client
 
-case class CourgetteSource[F[_]: Sync](
+case class CourgetteSource[F[_]: Async](
     val branch: Branch,
     val platform: Platform,
     val arch: Arch,
@@ -44,7 +44,7 @@ case class CourgetteSource[F[_]: Sync](
       )
       request = Request[F](uri = manifestUri, headers = Headers.headers)
       entityDecoder =
-        jsonOf(Sync[F], CourgetteBuild.decoder(branch, platform, arch))
+        jsonOf(Async[F], CourgetteBuild.decoder(branch, platform, arch))
       build <- httpClient.expect[CourgetteBuild](request)(entityDecoder)
     } yield build
 }

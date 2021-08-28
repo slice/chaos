@@ -6,8 +6,7 @@ import cats.Show
 
 import scala.util.control.NoStackTrace
 
-/**
-  * An error from the extractor. Failure scenarios usually arise when certain
+/** An error from the extractor. Failure scenarios usually arise when certain
   * entities cannot be found in the content of an asset.
   */
 sealed trait FrontendSourceError extends Exception

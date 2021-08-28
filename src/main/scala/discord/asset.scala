@@ -11,7 +11,9 @@ import cats.implicits._
 import org.http4s.Uri
 import org.http4s.implicits._
 
-/** A Discord client build asset (either an [[Asset.Script]] or [[Asset.Stylesheet]]). */
+/** A Discord client build asset (either an [[Asset.Script]] or
+  * [[Asset.Stylesheet]]).
+  */
 sealed trait Asset {
 
   /** The "name" of the asset. Usually a hash, but not strictly. */
@@ -20,11 +22,13 @@ sealed trait Asset {
   /** The extension of the asset. Usually either `"js"` or `"css"`. */
   def extension: String
 
-  /** The filename of the asset as a Uri. Does not include the authority (`discordapp.com`).  */
+  /** The filename of the asset as a Uri. Does not include the authority
+    * (`discordapp.com`).
+    */
   def filename: Uri = Uri.unsafeFromString(s"$name.$extension")
 
   /** The http4s Uri to this asset. */
-  def uri: Uri = uri"https://discordapp.com/assets" / filename.path
+  def uri: Uri = uri"https://discordapp.com/assets" / filename.path.toString
 }
 
 object Asset {

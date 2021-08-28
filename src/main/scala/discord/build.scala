@@ -18,7 +18,8 @@ sealed trait Build {
   def version: String
 
   /** The numerical version of the deployed build. This exists so that you may
-    * order builds chronologically. */
+    * order builds chronologically.
+    */
   def number: Int
 }
 

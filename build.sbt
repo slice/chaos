@@ -19,18 +19,15 @@ inThisBuild(
 )
 
 val V = new {
-  val cats              = "2.2.0-M1"
-  val `cats-effect`     = "2.1.3"
-  val http4s            = "0.21.4"
-  val circe             = "0.13.0"
-  val `circe-config`    = "0.7.0"
-  val log4cats          = "1.0.1"
-  val fs2               = "2.3.0"
+  val cats              = "2.6.1"
+  val `cats-effect`     = "3.2.4"
+  val http4s            = "0.23.1"
+  val circe             = "0.14.1"
+  val `circe-config`    = "0.8.0"
+  val log4cats          = "2.1.1"
+  val fs2               = "3.1.1"
   val logback           = "1.2.3"
   val `typesafe-config` = "1.4.0"
-  val scalatest         = "3.1.0"
-  val `mockito-scala`   = "1.11.2"
-  val upperbound        = "0.3.0"
 }
 
 val dependencies = Seq(
@@ -43,22 +40,21 @@ val dependencies = Seq(
   "io.circe"          %% "circe-config"            % V.`circe-config`,
   "io.circe"          %% "circe-generic-extras"    % V.circe,
   "org.typelevel"     %% "cats-core"               % V.cats,
+  "org.typelevel"     %% "cats-effect-kernel"      % V.`cats-effect`,
   "org.typelevel"     %% "cats-effect"             % V.`cats-effect`,
-  "org.typelevel"     %% "cats-effect-laws"        % V.`cats-effect`   % Test,
+  "org.typelevel"     %% "cats-effect-std"         % V.`cats-effect`,
   "co.fs2"            %% "fs2-core"                % V.fs2,
-  "io.chrisdavenport" %% "log4cats-core"           % V.log4cats,
-  "io.chrisdavenport" %% "log4cats-slf4j"          % V.log4cats,
-  "io.chrisdavenport" %% "log4cats-testing"        % V.log4cats        % Test,
+  "org.typelevel"     %% "log4cats-core"           % V.log4cats,
+  "org.typelevel"     %% "log4cats-slf4j"          % V.log4cats,
   "ch.qos.logback"     % "logback-classic"         % V.logback,
   "com.typesafe"       % "config"                  % V.`typesafe-config`,
-  "org.scalatest"     %% "scalatest"               % V.scalatest       % Test,
-  "org.mockito"       %% "mockito-scala"           % V.`mockito-scala` % Test,
-  "org.mockito"       %% "mockito-scala-scalatest" % V.`mockito-scala` % Test,
-  "org.systemfw"      %% "upperbound"              % V.upperbound,
+  "org.systemfw"      %% "upperbound"              % "0.3.1-SNAPSHOT",
 )
 
 lazy val chaos = (project in file("."))
   .enablePlugins(BuildInfoPlugin)
+  // .dependsOn(ProjectRef(uri("https://github.com/SystemFW/upperbound.git"), "root"))
+  // .dependsOn(RootProject(uri("git://github.com/SystemFW/upperbound.git")))
   .settings(
     name := "chaos",
     resolvers += Resolver.mavenCentral,
@@ -66,9 +62,6 @@ lazy val chaos = (project in file("."))
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, homepage),
     buildInfoPackage := "zone.slice.chaos",
     Test / scalacOptions += "-Yrangepos",
-    // A workaround for some type inference issues.
-    // See: https://github.com/mockito/mockito-scala/issues/29
-    Test / scalacOptions -= "-Wdead-code",
     addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
     // Fork when running because we spawn threads.
     run / fork := true,

@@ -1,25 +1,25 @@
 package zone.slice.chaos
 package source
 
-import org.http4s.{Headers => Http4sHeaders}
-import org.http4s.headers.{`User-Agent`, AgentComment, AgentProduct}
+import org.http4s.{Headers => Http4sHeaders, ProductId, ProductComment}
+import org.http4s.headers.`User-Agent`
 
 object Headers {
   def userAgentHeader: `User-Agent` = {
-    val mainProduct = AgentProduct(BuildInfo.name, Some(BuildInfo.version))
+    val mainProduct = ProductId(BuildInfo.name, Some(BuildInfo.version))
     val otherTokens = List(
-      AgentProduct("scala", Some(BuildInfo.scalaVersion)),
-      AgentProduct("http4s", Some(org.http4s.BuildInfo.version)),
+      ProductId("scala", Some(BuildInfo.scalaVersion)),
+      ProductId("http4s", Some(org.http4s.BuildInfo.version)),
     )
 
     `User-Agent`(
       mainProduct,
       BuildInfo.homepage match {
         case None           => otherTokens
-        case Some(homepage) => AgentComment(homepage.toString) +: otherTokens
+        case Some(homepage) => ProductComment(homepage.toString) +: otherTokens
       },
     )
   }
 
-  lazy val headers: Http4sHeaders = Http4sHeaders.of(userAgentHeader)
+  lazy val headers: Http4sHeaders = Http4sHeaders(userAgentHeader)
 }

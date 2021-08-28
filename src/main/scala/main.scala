@@ -4,8 +4,8 @@ import poller._
 
 import cats.effect._
 import cats.implicits._
-import io.chrisdavenport.log4cats.Logger
-import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 import io.circe.DecodingFailure
 import io.circe.config.parser
 import io.circe.generic.extras.Configuration
@@ -30,7 +30,7 @@ object Main extends IOApp {
         eput(s"Failed to load config file: $error")
     }
 
-  def program[F[_]: ConcurrentEffect: Timer: ContextShift]: F[ExitCode] =
+  def program[F[_]: Async]: F[ExitCode] =
     parser
       .decodeF[F, Config]()
       .attemptT

@@ -10,8 +10,10 @@ import cats.Show
   * object. For example, a deploy object is able to describe whether it is a
   * previous build that has been deployed again (a "revert").
   *
-  * @param build the build
-  * @param isRevert whether this build has been deployed before
+  * @param build
+  *   the build
+  * @param isRevert
+  *   whether this build has been deployed before
   */
 case class Deploy(
     build: Build,

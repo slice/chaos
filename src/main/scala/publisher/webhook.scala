@@ -5,16 +5,16 @@ import discord._
 import source.Headers
 
 import cats.implicits._
-import cats.effect.Sync
+import cats.effect.Async
 import org.http4s.circe._
 import org.http4s.Uri
 import org.http4s.Method._
 import org.http4s.client.Client
-import io.chrisdavenport.log4cats.Logger
+import org.typelevel.log4cats.Logger
 import io.circe._
 import io.circe.literal._
 
-case class WebhookPublisher[F[_]: Sync](endpoint: Uri, httpClient: Client[F])
+case class WebhookPublisher[F[_]: Async](endpoint: Uri, httpClient: Client[F])
     extends HTTPPublisher[F] {
   def deployJson(deploy: Deploy): Json =
     deploy.build match {

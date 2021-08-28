@@ -6,23 +6,23 @@ import zone.slice.chaos.discord._
 
 import cats.effect._
 import cats.implicits._
-import io.chrisdavenport.log4cats.Logger
-import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 import org.http4s.{Request, Uri}
 import org.http4s.client.Client
 
 import scala.util.matching._
 
-/**
-  * A [[Source]] for Discord frontend [[discord.Build builds]].
+/** A [[Source]] for Discord frontend [[discord.Build builds]].
   *
-  * @param scraper the scraper
+  * @param scraper
+  *   the scraper
   */
 case class FrontendSource[F[_]](
     val variant: Branch,
     val httpClient: Client[F],
 )(implicit
-    F: Sync[F],
+    F: Async[F],
 ) extends Source[F, FrontendBuild] {
   import FrontendSource._
 
@@ -60,8 +60,7 @@ case class FrontendSource[F[_]](
     ).mapN(AssetBundle.apply _)
   }
 
-  /**
-    * Fetches and extracts the build number and build hash from an
+  /** Fetches and extracts the build number and build hash from an
     * [[discord.AssetBundle]].
     */
   def fetchBuildInfo(assets: AssetBundle): F[(Int, String)] = {
@@ -77,11 +76,11 @@ case class FrontendSource[F[_]](
     } yield info
   }
 
-  /**
-    * Scrapes a [[discord.Branch]] for [[discord.FrontendBuild build information]].
+  /** Scrapes a [[discord.Branch]] for
+    * [[discord.FrontendBuild build information]].
     *
     * This takes care of downloading the branch's HTML, finding
-    * [[discord.Asset]]s, extracting the build number, etc.
+    * [[discord.Asset]] s, extracting the build number, etc.
     */
   def build[A >: FrontendBuild]: F[A] = {
     for {
