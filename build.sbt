@@ -13,7 +13,7 @@ val V = new {
 
 lazy val root = (project in file(".")).settings(
   name := "chaos",
-  verison := "0.0.0",
+  version := "0.0.0",
   fork := true,
   libraryDependencies ++= Seq(
     "org.typelevel" %% "cats-effect"         % "3.2.5",
