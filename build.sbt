@@ -2,20 +2,22 @@ inThisBuild(
   Seq(
     organization := "zone.slice",
     scalaVersion := "3.0.1",
-    startYear := Some(2021),
+    startYear    := Some(2021),
   ),
 )
 
 val V = new {
+  val cats   = "2.6.1"
   val fs2    = "3.1.1"
   val http4s = "0.23.1"
 }
 
 lazy val root = (project in file(".")).settings(
-  name := "chaos",
+  name    := "chaos",
   version := "0.0.0",
-  fork := true,
+  fork    := true,
   libraryDependencies ++= Seq(
+    "org.typelevel" %% "cats-core"           % V.cats,
     "org.typelevel" %% "cats-effect"         % "3.2.5",
     "co.fs2"        %% "fs2-core"            % V.fs2,
     "co.fs2"        %% "fs2-io"              % V.fs2,
