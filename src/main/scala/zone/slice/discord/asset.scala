@@ -14,8 +14,8 @@ enum AssetKind:
 case class AssetBundle(assetMap: Map[AssetKind, Vector[Asset]]):
   def assets: Vector[Asset] =
     assetMap.values.toVector.flatten
-  def assetsOfKind(kind: AssetKind): Option[Vector[Asset]] =
-    assetMap.get(kind)
+  def assetsOfKind(kind: AssetKind): Vector[Asset] =
+    assetMap.get(kind).getOrElse(Vector.empty)
 
 object AssetBundle:
   def empty: AssetBundle = AssetBundle(Map.empty)
