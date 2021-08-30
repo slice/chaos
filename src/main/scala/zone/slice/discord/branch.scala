@@ -1,6 +1,6 @@
 package zone.slice.discord
 
-import cats.syntax.all._
+import cats.syntax.all.*
 import cats.Eq
 
 enum Branch:

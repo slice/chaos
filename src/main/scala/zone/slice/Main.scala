@@ -1,14 +1,14 @@
 package zone.slice
 
-import discord.{_, given}
+import discord.{*, given}
 
 import fs2.Stream
-import cats._
-import cats.effect._
+import cats.*
+import cats.effect.*
 import cats.effect.std.Console
-import cats.syntax.all._
+import cats.syntax.all.*
 
-import concurrent.duration._
+import concurrent.duration.*
 import fs2.concurrent.Topic
 import org.http4s.blaze.client.BlazeClientBuilder
 
@@ -20,33 +20,6 @@ def pick[F[_], A](elems: Seq[A])(using F: Sync[F]): F[A] =
       case 1 => elems(0)
       case n => elems(random.nextInt(n))
   }
-
-/** Submit any changes in a stream to a topic. */
-def poll[F[_]: Concurrent, A: Eq](
-    things: Stream[F, A],
-    topic: Topic[F, A],
-): Stream[F, Nothing] =
-  things.changes.through(topic.publish).drain
-
-/** Publishing operations that publishers can perform. */
-trait Publish[F[_]]:
-  def output(text: String): F[Unit]
-
-/** A function that publishes something. */
-type Publisher[F[_], -A] = (A, Publish[F]) => F[Unit]
-
-extension [F[_], A](publisher: Publisher[F, A])(using F: Applicative[F])
-  def when(cond: A => Boolean): Publisher[F, A] =
-    (a, p) => publisher(a, p).whenA(cond(a))
-
-/** Forward things from a topic into a publisher. */
-def subscribe[F[_]: Functor, A](topic: Topic[F, A], f: Publisher[F, A])(using
-    publish: Publish[F],
-): Stream[F, Nothing] =
-  topic
-    .subscribe(0)
-    .evalTap(f(_, publish))
-    .drain
 
 def printPublisher[F[_]](prefix: String)(using Monad[F]) =
   (b: FeBuild, p: Publish[F]) =>
