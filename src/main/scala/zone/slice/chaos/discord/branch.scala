@@ -16,6 +16,9 @@ enum Branch:
       case Canary      => 0xf1c40f
       case Development => 0x333333
 
+  def humanName: String =
+    if this == Ptb then "PTB" else this.toString
+
   def hasFrontend: Boolean =
     this != Development
 
