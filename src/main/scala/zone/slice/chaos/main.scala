@@ -7,10 +7,14 @@ import cats.*
 import cats.effect.*
 import cats.effect.std.Console
 import cats.syntax.all.*
+import org.http4s.Uri
+import org.http4s.blaze.client.BlazeClientBuilder
+import org.http4s.circe.*
+import io.circe.Json
+import io.circe.syntax.*
 
 import concurrent.duration.*
 import fs2.concurrent.Topic
-import org.http4s.blaze.client.BlazeClientBuilder
 
 private def rand[F[_]](min: Int, max: Int)(using F: Sync[F]): F[Int] =
   F.delay((new scala.util.Random).between(min, max + 1))
@@ -21,6 +25,18 @@ def printPublisher[F[_]](prefix: String)(using Monad[F]) =
       _ <- p.output(s"$prefix: :3")
       _ <- p.output(s"$prefix: $b!")
     yield ()
+
+def discordWebhookPublisher[F[_]](webhook: Uri)(using Monad[F], Concurrent[F]) =
+  (b: FeBuild, p: Publish[F]) =>
+    val embed: Json =
+      Json.obj(
+        "title"       -> s"${b.branch.humanName} ${b.number}".asJson,
+        "description" -> s"Hash: `${b.hash}`".asJson,
+        "color"       -> b.branch.color.asJson,
+      )
+    val body: Json = Json.obj("embeds" -> Json.arr(embed))
+
+    p.post[Json, Unit](webhook, body)
 
 class Poller[F[_]](using publish: Publish[F])(using Async[F]):
   private def fakeBuild(version: Int): FeBuild =

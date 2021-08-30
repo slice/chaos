@@ -10,6 +10,7 @@ val V = new {
   val cats   = "2.6.1"
   val fs2    = "3.1.1"
   val http4s = "0.23.1"
+  val circe  = "0.14.1"
 }
 
 lazy val root = (project in file(".")).settings(
@@ -24,12 +25,16 @@ lazy val root = (project in file(".")).settings(
     "org.typelevel" %% "munit-cats-effect-3" % "1.0.5" % Test,
     "org.http4s"    %% "http4s-dsl"          % V.http4s,
     "org.http4s"    %% "http4s-blaze-client" % V.http4s,
+    "org.http4s"    %% "http4s-circe"        % V.http4s,
+    "io.circe"      %% "circe-core"          % V.circe,
+    "io.circe"      %% "circe-parser"        % V.circe,
   ),
   scalacOptions ++= Seq(
     "-deprecation",
     "-explain",
     "-explain-types",
     "-new-syntax",
-    "-source", "future"
-  )
+    "-source",
+    "future",
+  ),
 )
