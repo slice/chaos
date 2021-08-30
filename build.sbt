@@ -25,4 +25,11 @@ lazy val root = (project in file(".")).settings(
     "org.http4s"    %% "http4s-dsl"          % V.http4s,
     "org.http4s"    %% "http4s-blaze-client" % V.http4s,
   ),
+  scalacOptions ++= Seq(
+    "-deprecation",
+    "-explain",
+    "-explain-types",
+    "-new-syntax",
+    "-source", "future"
+  )
 )
