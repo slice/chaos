@@ -64,6 +64,10 @@ object Main extends IOApp.Simple:
     httpClient <- BlazeClientBuilder[F](
       concurrent.ExecutionContext.global,
     ).resource
+    // can't do this, because of https://github.com/lampepfl/dotty/issues/12646:
+    //   given Publish[F] = new Publish[F]:
+    //     ...
+    //   poller = Poller[F]
     publish = new Publish[F]:
       def output(text: String): F[Unit] = Console[F].errorln(text)
     poller = Poller[F](using publish)
