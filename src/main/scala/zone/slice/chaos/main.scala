@@ -34,18 +34,18 @@ class Poller[F[_]](using publish: Publish[F])(using Async[F]):
       assets = AssetBundle.empty,
     )
 
-  private def builds: Stream[F, FeBuild] = (for
-    baseVersion <- Stream.eval(rand(10_000, 100_000))
-    build <- Stream
-      .iterate(baseVersion)(_ + 1)
-      .flatMap(version =>
-        for
-          repeats <- Stream.eval(rand(2, 6))
-          build = fakeBuild(version)
-          b <- Stream(build).repeatN(repeats)
-        yield b,
+  private def builds: Stream[F, FeBuild] =
+    Stream
+      .eval(rand(10_000, 100_000))
+      .flatMap(baseVersion =>
+        Stream
+          .iterate(baseVersion)(_ + 1)
+          .flatMap(version =>
+            Stream.eval(rand(2, 6)).flatMap(Stream(version).repeatN(_)),
+          ),
       )
-  yield build).metered(1.second)
+      .map(fakeBuild)
+      .metered(1.second)
 
   def pollForever: F[Unit] = for
     topic <- Topic[F, FeBuild]
