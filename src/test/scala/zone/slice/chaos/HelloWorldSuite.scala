@@ -1,4 +1,4 @@
-package zone.slice
+package zone.slice.chaos
 
 import cats.effect.{IO, SyncIO}
 import munit.CatsEffectSuite

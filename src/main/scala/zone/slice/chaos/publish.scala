@@ -1,4 +1,4 @@
-package zone.slice
+package zone.slice.chaos
 
 import fs2.Stream
 import fs2.concurrent.Topic

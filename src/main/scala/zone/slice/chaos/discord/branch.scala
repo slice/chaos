@@ -1,4 +1,4 @@
-package zone.slice.discord
+package zone.slice.chaos.discord
 
 import cats.syntax.all.*
 import cats.Eq

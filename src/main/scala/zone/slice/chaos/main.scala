@@ -1,4 +1,4 @@
-package zone.slice
+package zone.slice.chaos
 
 import discord.{*, given}
 
