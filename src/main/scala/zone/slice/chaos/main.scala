@@ -13,10 +13,7 @@ import fs2.concurrent.Topic
 import org.http4s.blaze.client.BlazeClientBuilder
 
 private def rand[F[_]](min: Int, max: Int)(using F: Sync[F]): F[Int] =
-  F.delay {
-    val rand = new scala.util.Random
-    rand.nextInt(max + 1) + min
-  }
+  F.delay((new scala.util.Random).between(min, max + 1))
 
 def printPublisher[F[_]](prefix: String)(using Monad[F]) =
   (b: FeBuild, p: Publish[F]) =>
