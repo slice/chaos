@@ -1,7 +1,7 @@
 inThisBuild(
   Seq(
     organization := "zone.slice",
-    scalaVersion := "3.0.1",
+    scalaVersion := "3.0.2-RC1",
     startYear    := Some(2021),
   ),
 )
