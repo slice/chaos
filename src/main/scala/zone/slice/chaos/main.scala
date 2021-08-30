@@ -59,19 +59,22 @@ class Poller[F[_]](using publish: Publish[F])(using Async[F]):
     _ <- work.compile.drain
   yield ()
 
+val userAgent =
+  org.http4s.headers.`User-Agent`(org.http4s.ProductId("chaos", "0.0.0".some))
+
 object Main extends IOApp.Simple:
   def program[F[_]: Async: Console]: F[Nothing] = (for
-    httpClient <- BlazeClientBuilder[F](
-      concurrent.ExecutionContext.global,
-    ).resource
+    executionContext <- Resource.eval(Async[F].executionContext)
+    httpClient <- BlazeClientBuilder[F](executionContext)
+      .withUserAgent(userAgent)
+      .resource
     // can't do this, because of https://github.com/lampepfl/dotty/issues/12646:
     //   given Publish[F] = new Publish[F]:
     //     ...
     //   poller = Poller[F]
-    publish = new Publish[F]:
-      def output(text: String): F[Unit] = Console[F].errorln(text)
-    poller = Poller[F](using publish)
-    program <- Resource.liftK[F](poller.pollForever)
+    publish = Publish.make[F](console = Console[F], client = httpClient)
+    poller  = Poller[F](using publish)
+    program <- Resource.eval(poller.pollForever)
   yield ()).useForever
 
   def run: IO[Unit] = program[IO]
