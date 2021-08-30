@@ -12,13 +12,10 @@ import concurrent.duration.*
 import fs2.concurrent.Topic
 import org.http4s.blaze.client.BlazeClientBuilder
 
-def pick[F[_], A](elems: Seq[A])(using F: Sync[F]): F[A] =
+private def rand[F[_]](min: Int, max: Int)(using F: Sync[F]): F[Int] =
   F.delay {
-    val random = new scala.util.Random
-    elems.size match
-      case 0 => throw java.lang.RuntimeException("dude wtf")
-      case 1 => elems(0)
-      case n => elems(random.nextInt(n))
+    val rand = new scala.util.Random
+    rand.nextInt(max + 1) + min
   }
 
 def printPublisher[F[_]](prefix: String)(using Monad[F]) =
@@ -28,25 +25,27 @@ def printPublisher[F[_]](prefix: String)(using Monad[F]) =
       _ <- p.output(s"$prefix: $b!")
     yield ()
 
-class Poller[F[_]](using val publish: Publish[F])(using Async[F]):
-  // simulate an infinite amount of builds of incrementing version numbers and
-  // random branches, each a second apart
-  private def builds = Stream
-    .unfoldEval(0)(n =>
-      pick(Branch.values.to(List))
-        .map(b =>
-          (
-            FeBuild(
-              branch = b,
-              hash = "",
-              number = n,
-              assets = AssetBundle.empty,
-            ),
-            n + 1,
-          ).some,
-        ),
+class Poller[F[_]](using publish: Publish[F])(using Async[F]):
+  private def fakeBuild(version: Int): FeBuild =
+    FeBuild(
+      branch = Branch.Canary,
+      hash = "???",
+      number = version,
+      assets = AssetBundle.empty,
     )
-    .metered(1.second)
+
+  private def builds: Stream[F, FeBuild] = (for
+    baseVersion <- Stream.eval(rand(10_000, 100_000))
+    build <- Stream
+      .iterate(baseVersion)(_ + 1)
+      .flatMap(version =>
+        for
+          repeats <- Stream.eval(rand(2, 6))
+          build = fakeBuild(version)
+          b <- Stream(build).repeatN(repeats)
+        yield b,
+      )
+  yield build).metered(1.second)
 
   def pollForever: F[Unit] = for
     topic <- Topic[F, FeBuild]
