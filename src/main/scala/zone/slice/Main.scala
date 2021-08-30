@@ -55,7 +55,7 @@ class Poller[F[_]](using publish: Publish[F])(using Async[F]):
     ).map(subscribe(topic, _))
     consume = subscribers.parJoinUnbounded
     watch   = poll(builds, topic)
-    work    = watch concurrently consume
+    work    = watch.concurrently(consume)
     _ <- work.compile.drain
   yield ()
 
