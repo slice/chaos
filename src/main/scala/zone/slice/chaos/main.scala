@@ -76,7 +76,7 @@ class Poller[F[_]](using publish: Publish[F])(using Async[F]):
         (pollStream.head.filter(build =>
           initialState
             .flatMap(_.get(label))
-            .map(_ == build.number)
+            .map(_ != build.number)
             .getOrElse(true),
         ) ++ pollStream).map(label -> _)
       }
