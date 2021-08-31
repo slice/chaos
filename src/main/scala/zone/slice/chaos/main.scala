@@ -72,13 +72,20 @@ class Poller[F[_]](using publish: Publish[F])(using Async[F]):
     )
     scrape = scrapers
       .map { case label -> buildStream =>
-        val pollStream = poll(buildStream, topic)
-        (pollStream.head.filter(build =>
-          initialState
-            .flatMap(_.get(label))
-            .map(_ != build.number)
-            .getOrElse(true),
-        ) ++ pollStream).map(label -> _)
+        val deduplicationFilter: fs2.Pipe[F, FeBuild, FeBuild] =
+          filter1(firstBuild =>
+            initialState
+              .flatMap(_.get(label))
+              .map(_ != firstBuild.number)
+              // if there's no last known latest version, always publish
+              .getOrElse(true),
+          )
+
+        poll(buildStream, topic)
+          // ignore the first build if it's already the latest according to
+          // the state
+          .through(deduplicationFilter)
+          .map(label -> _)
       }
       .parJoinUnbounded
       .through(trackLatest(initialState.getOrElse(State.empty))(_.number))
