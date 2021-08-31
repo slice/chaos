@@ -3,6 +3,7 @@ package zone.slice.chaos
 import discord.{*, given}
 
 import fs2.Stream
+import fs2.io.file.{Path, Files}
 import cats.*
 import cats.effect.*
 import cats.effect.std.Console
@@ -20,11 +21,7 @@ private def rand[F[_]](min: Int, max: Int)(using F: Sync[F]): F[Int] =
   F.delay((new scala.util.Random).between(min, max + 1))
 
 def printPublisher[F[_]](prefix: String)(using Monad[F]) =
-  (b: FeBuild, p: Publish[F]) =>
-    for
-      _ <- p.output(s"$prefix: :3")
-      _ <- p.output(s"$prefix: $b!")
-    yield ()
+  (b: FeBuild, p: Publish[F]) => p.output(s"$prefix: $b")
 
 def discordWebhookPublisher[F[_]](webhook: Uri)(using Monad[F], Concurrent[F]) =
   (b: FeBuild, p: Publish[F]) =>
@@ -39,36 +36,60 @@ def discordWebhookPublisher[F[_]](webhook: Uri)(using Monad[F], Concurrent[F]) =
     p.post[Json, Unit](webhook, body)
 
 class Poller[F[_]](using publish: Publish[F])(using Async[F]):
-  private def fakeBuild(version: Int): FeBuild =
+  private def fakeBuild(version: Int, branch: Branch): FeBuild =
     FeBuild(
-      branch = Branch.Canary,
+      branch = branch,
       hash = "???",
       number = version,
       assets = AssetBundle.empty,
     )
 
-  private def builds: Stream[F, FeBuild] =
-    Stream
-      .eval(rand(10_000, 100_000))
-      .flatMap(baseVersion =>
-        Stream
-          .iterate(baseVersion)(_ + 1)
-          .flatMap(version =>
-            Stream.eval(rand(2, 6)).flatMap(Stream(version).repeatN(_)),
-          ),
-      )
-      .map(fakeBuild)
-      .metered(1.second)
+  private def builds(branch: Branch): Stream[F, FeBuild] = (for
+    baseVersion <- Stream.eval(rand(10_000, 100_000))
+    version     <- Stream.iterate(baseVersion)(_ + 1)
+    repeats     <- Stream.eval(rand(2, 6))
+    version     <- Stream(version).repeatN(repeats)
+  yield fakeBuild(version, branch)).metered(1.second)
 
   def pollForever: F[Unit] = for
     topic <- Topic[F, FeBuild]
+
     subscribers = Stream(
-      printPublisher("canary build").when(_.branch == Branch.Canary),
-      printPublisher("build w/ even version").when(_.number % 2 == 0),
+      printPublisher("*** canary build").when(_.branch == Branch.Canary),
+      printPublisher("*** build w/ even version").when(_.number % 2 == 0),
     ).map(subscribe(topic, _))
-    consume = subscribers.parJoinUnbounded
-    watch   = poll(builds, topic)
-    work    = watch.concurrently(consume)
+    publish = subscribers.parJoinUnbounded
+
+    statePath = Path("./state.chaos")
+    initialState: Option[State] <- Files[F]
+      .exists(statePath)
+      .ifM(State.read[F](statePath).map(_.some), none[State].pure)
+    _ <- Async[F].blocking(println(s"exists? $initialState"))
+
+    scrapers = Stream[F, (String, Stream[F, FeBuild])](
+      ("latest canary", builds(Branch.Canary)),
+      ("cool stables", builds(Branch.Stable)),
+    )
+    scrape = scrapers
+      .map { case label -> buildStream =>
+        val pollStream = poll(buildStream, topic)
+        (pollStream.head.filter(build =>
+          initialState
+            .flatMap(_.get(label))
+            .map(_ == build.number)
+            .getOrElse(true),
+        ) ++ pollStream).map(label -> _)
+      }
+      .parJoinUnbounded
+      .scan(initialState.getOrElse(State.empty)) {
+        case (state, label -> build) =>
+          state.update(label, build.number)
+      }
+      .debug(s => s"latest builds state: $s")
+      .map(_.encode)
+      .through(continuouslyOverwrite(statePath))
+
+    work = scrape.concurrently(publish)
     _ <- work.compile.drain
   yield ()
 
