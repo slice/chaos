@@ -81,10 +81,7 @@ class Poller[F[_]](using publish: Publish[F])(using Async[F]):
         ) ++ pollStream).map(label -> _)
       }
       .parJoinUnbounded
-      .scan(initialState.getOrElse(State.empty)) {
-        case (state, label -> build) =>
-          state.update(label, build.number)
-      }
+      .through(trackLatest(initialState.getOrElse(State.empty))(_.number))
       .debug(s => s"latest builds state: $s")
       .map(_.encode)
       .through(continuouslyOverwrite(statePath))
