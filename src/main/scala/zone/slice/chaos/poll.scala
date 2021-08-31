@@ -5,9 +5,9 @@ import fs2.concurrent.Topic
 import cats.Eq
 import cats.effect.Concurrent
 
-/** Submit any changes in a stream to a topic. */
+/** Emit any changes in a stream, additionally publishing them to a topic. */
 def poll[F[_]: Concurrent, A: Eq](
     things: Stream[F, A],
     topic: Topic[F, A],
-): Stream[F, Nothing] =
-  things.changes.through(topic.publish).drain
+): Stream[F, A] =
+  things.changes.evalTap(topic.publish1)
