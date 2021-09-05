@@ -30,6 +30,7 @@ lazy val chaos = (project in file(".")).settings(
     "org.http4s"    %% "http4s-circe"        % V.http4s,
     "io.circe"      %% "circe-core"          % V.circe,
     "io.circe"      %% "circe-parser"        % V.circe,
+    "io.circe"      %% "circe-literal"       % V.circe,
   ),
 
   // better-monadic-for enables useful implicit patterns, but the compiler

@@ -14,7 +14,7 @@ import org.http4s.Uri
 import org.http4s.blaze.client.BlazeClientBuilder
 import org.http4s.circe._
 import _root_.io.circe.Json
-import _root_.io.circe.syntax._
+import _root_.io.circe.literal._
 
 import concurrent.duration._
 import fs2.concurrent.Topic
@@ -27,13 +27,14 @@ object publishers {
     webhook: Uri,
   ): Publisher[F, FeBuild] =
     (b: FeBuild, p: Publish[F]) => {
-      val embed: Json =
-        Json.obj(
-          "title"       -> s"${b.branch.humanName} ${b.number}".asJson,
-          "description" -> s"Hash: `${b.hash}`".asJson,
-          "color"       -> b.branch.color.asJson,
-        )
-      val body: Json = Json.obj("embeds" -> Json.arr(embed))
+      val embed = json"""
+        {
+          "title": ${s"${b.branch.humanName} ${b.number}"},
+          "description": ${s"Hash: `${b.hash}`"},
+          "color": ${b.branch.color}
+        }
+      """
+      val body = json"""{"embeds": [$embed]}"""
 
       p.post[Json, Unit](webhook, body)
     }
