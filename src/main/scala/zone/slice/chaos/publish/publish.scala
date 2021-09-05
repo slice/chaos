@@ -16,8 +16,8 @@ trait Publish[F[_]] {
     this.request(Request[F](uri = from))
 
   def post[I, O](to: Uri, body: I)(implicit
-      decoder: EntityDecoder[F, O],
-      encoder: EntityEncoder[F, I],
+    decoder: EntityDecoder[F, O],
+    encoder: EntityEncoder[F, I],
   ): F[O] =
     this.request(Request[F](method = Method.POST, uri = to).withEntity(body))
 }
@@ -28,7 +28,7 @@ object Publish {
       def output(text: String): F[Unit] =
         console.errorln(text)
       def request[A](request: Request[F])(implicit
-          decoder: EntityDecoder[F, A],
+        decoder: EntityDecoder[F, A],
       ): F[A] =
         client.expect(request)
     }

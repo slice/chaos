@@ -24,7 +24,7 @@ object publishers {
     (b: FeBuild, p: Publish[F]) => p.output(s"$prefix: $b")
 
   def discordWebhookPublisher[F[_]: Concurrent](
-      webhook: Uri,
+    webhook: Uri,
   ): Publisher[F, FeBuild] =
     (b: FeBuild, p: Publish[F]) => {
       val embed: Json =
@@ -42,10 +42,10 @@ object publishers {
 import publishers._
 
 class Poller[F[_]](implicit
-    publish: Publish[F],
-    F: Async[F],
-    C: Console[F],
-    random: Random[F],
+  publish: Publish[F],
+  F: Async[F],
+  C: Console[F],
+  random: Random[F],
 ) {
   private def fakeBuild(version: Int, branch: Branch): FeBuild =
     FeBuild(

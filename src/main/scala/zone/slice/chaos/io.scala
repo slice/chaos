@@ -6,7 +6,7 @@ import fs2.io.file.{Files, Path, Flags, Flag}
 
 package object io {
   def continuouslyOverwrite[F[_]: Files](
-      path: Path,
+    path: Path,
   )(implicit ev: MonadCancel[F, Throwable]): Pipe[F, String, Nothing] = {
     val cursor =
       Files[F].writeCursor(path, Flags(Flag.Create, Flag.Write, Flag.Truncate))

@@ -14,14 +14,14 @@ package object publish {
 
     /** Conditionalizes a publisher. */
     def when(cond: A => Boolean)(implicit
-        ev: Applicative[F],
+      ev: Applicative[F],
     ): Publisher[F, A] =
       (a, p) => publisher(a, p).whenA(cond(a))
   }
 
   /** Forward things from a topic into a publisher. */
   def subscribe[F[_]: Functor, A](topic: Topic[F, A], f: Publisher[F, A])(
-      implicit publish: Publish[F],
+    implicit publish: Publish[F],
   ): Stream[F, Nothing] =
     topic
       .subscribe(0)

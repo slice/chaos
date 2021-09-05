@@ -9,7 +9,7 @@ package object poll {
 
   /** Emit any changes in a stream, additionally publishing them to a topic. */
   def poll[F[_]: Concurrent, A: Eq](
-      topic: Topic[F, A],
+    topic: Topic[F, A],
   ): Pipe[F, A, A] =
     _.changes.evalTap(topic.publish1)
 
@@ -27,7 +27,7 @@ package object poll {
     * a state.
     */
   def dedup1FromState[F[_], A](state: State)(
-      valueToVersion: A => Number,
+    valueToVersion: A => Number,
   ): Pipe[F, (String, Stream[F, A]), (String, Stream[F, A])] =
     _.map { case label -> stream =>
       val deduplicationFilter: fs2.Pipe[F, A, A] =
