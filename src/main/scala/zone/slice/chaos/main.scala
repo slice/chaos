@@ -62,14 +62,10 @@ class Poller[F[_]](implicit
     version     <- Stream(version).repeatN(repeats.toLong)
   } yield fakeBuild(version, branch)).metered(1.second)
 
-  val funnyWebhook =
-    "https://discord.com/api/webhooks/469696638537957392/CpriOV_sPJUQ4cAtDWw9m9lmKMRKPL8ZBg5k1zzjrATc-osQpTm_Ibj0SUCy6gDFeFMb"
-
   def pollForever: F[Unit] = for {
     topic <- Topic[F, FeBuild]
 
     subscribers = Stream(
-      discordWebhookPublisher[F](Uri.unsafeFromString(funnyWebhook)),
       printPublisher[F]("*** canary build").when(_.branch == Branch.Canary),
       printPublisher[F]("*** build w/ even version").when(_.number % 2 == 0),
     )
