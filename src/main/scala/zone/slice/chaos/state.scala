@@ -33,7 +33,7 @@ extension (state: State)
     state.get(label)
 
 /** Given an initial state and a way to go from values to their versions, track
-  * a stream of labelled values' latest versions into a [[State]].
+  * a stream of labeled values' latest versions into a [[State]].
   */
 def trackLatest[F[_], A](
     initialState: State,

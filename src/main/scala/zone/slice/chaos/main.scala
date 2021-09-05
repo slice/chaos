@@ -35,7 +35,7 @@ def discordWebhookPublisher[F[_]](webhook: Uri)(using Monad[F], Concurrent[F]) =
 
     p.post[Json, Unit](webhook, body)
 
-class Poller[F[_]](using publish: Publish[F])(using Async[F]):
+class Poller[F[_]](using publish: Publish[F])(using Async[F], Console[F]):
   private def fakeBuild(version: Int, branch: Branch): FeBuild =
     FeBuild(
       branch = branch,
@@ -61,34 +61,26 @@ class Poller[F[_]](using publish: Publish[F])(using Async[F]):
     publish = subscribers.parJoinUnbounded
 
     statePath = Path("./state.chaos")
-    initialState: Option[State] <- Files[F]
+    initialState: State <- Files[F]
       .exists(statePath)
       .ifM(State.read[F](statePath).map(_.some), none[State].pure)
-    _ <- Async[F].blocking(println(s"exists? $initialState"))
+      .map(_.getOrElse(State.empty))
+    _ <- Console[F].println(s"*** initial state: $initialState")
 
     scrapers = Stream[F, (String, Stream[F, FeBuild])](
       ("latest canary", builds(Branch.Canary)),
       ("cool stables", builds(Branch.Stable)),
     )
     scrape = scrapers
-      .map { case label -> buildStream =>
-        val deduplicationFilter: fs2.Pipe[F, FeBuild, FeBuild] =
-          filter1(firstBuild =>
-            initialState
-              .flatMap(_.get(label))
-              .map(_ != firstBuild.number)
-              // if there's no last known latest version, always publish
-              .getOrElse(true),
-          )
-
-        poll(buildStream, topic)
-          // ignore the first build if it's already the latest according to
-          // the state
-          .through(deduplicationFilter)
-          .map(label -> _)
+      .through(dedup1FromState(initialState)(_.number))
+      .map { case label -> builds =>
+        // throw away build stream labels when submitting to the topic
+        val topic2 = topic.imap[(String, FeBuild)](("", _))(_._2)
+        // inject labels into the build stream
+        builds.map(build => label -> build).through(poll(topic2))
       }
       .parJoinUnbounded
-      .through(trackLatest(initialState.getOrElse(State.empty))(_.number))
+      .through(trackLatest(initialState)(_.number))
       .debug(s => s"latest builds state: $s")
       .map(_.encode)
       .through(continuouslyOverwrite(statePath))
