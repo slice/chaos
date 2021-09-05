@@ -1,30 +1,40 @@
-package zone.slice.chaos.discord
+package zone.slice.chaos
+package discord
 
-import cats.syntax.all.*
+import cats.syntax.all._
 import cats.Eq
 
-enum Branch:
-  case Stable
-  case Ptb
-  case Canary
-  case Development
+sealed trait Branch {
+  import Branch._
 
   def color: Int =
-    this match
+    this match {
       case Stable      => 0x7289da
       case Ptb         => 0x99aab5
       case Canary      => 0xf1c40f
       case Development => 0x333333
+    }
 
   def humanName: String =
-    if this == Ptb then "PTB" else this.toString
+    if (this === Ptb) "PTB" else this.toString
 
   def hasFrontend: Boolean =
-    this != Development
+    this =!= Development
 
   def subdomain: Option[String] =
-    this match
+    this match {
       case Stable      => none
       case Ptb         => "ptb".some
       case Canary      => "canary".some
       case Development => none
+    }
+}
+
+object Branch {
+  case object Stable      extends Branch
+  case object Ptb         extends Branch
+  case object Canary      extends Branch
+  case object Development extends Branch
+
+  implicit val eqBranch: Eq[Branch] = Eq.fromUniversalEquals
+}

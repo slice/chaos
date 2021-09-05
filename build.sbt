@@ -1,7 +1,7 @@
 inThisBuild(
   Seq(
     organization := "zone.slice",
-    scalaVersion := "3.0.1",
+    scalaVersion := "2.13.6",
     startYear    := Some(2021),
   ),
 )
@@ -13,7 +13,9 @@ val V = new {
   val circe  = "0.14.1"
 }
 
-lazy val root = (project in file(".")).settings(
+addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1")
+
+lazy val chaos = (project in file(".")).settings(
   name    := "chaos",
   version := "0.0.0",
   fork    := true,
@@ -28,13 +30,5 @@ lazy val root = (project in file(".")).settings(
     "org.http4s"    %% "http4s-circe"        % V.http4s,
     "io.circe"      %% "circe-core"          % V.circe,
     "io.circe"      %% "circe-parser"        % V.circe,
-  ),
-  scalacOptions ++= Seq(
-    "-deprecation",
-    "-explain",
-    "-explain-types",
-    "-new-syntax",
-    "-source",
-    "future",
   ),
 )

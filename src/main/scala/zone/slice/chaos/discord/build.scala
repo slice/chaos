@@ -1,4 +1,5 @@
-package zone.slice.chaos.discord
+package zone.slice.chaos
+package discord
 
 import cats.Eq
 
@@ -9,4 +10,6 @@ case class FeBuild(
     assets: AssetBundle,
 )
 
-given Eq[FeBuild] = Eq.by(_.number)
+object FeBuild {
+  implicit val eqBuild: Eq[FeBuild] = Eq.by(_.number)
+}
