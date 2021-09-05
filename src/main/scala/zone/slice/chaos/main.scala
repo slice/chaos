@@ -3,6 +3,7 @@ package zone.slice.chaos
 import discord._
 import publish._
 import io._
+import stream.FallibleStream
 
 import fs2.Stream
 import fs2.io.file.{Path, Files}
@@ -69,7 +70,7 @@ class Poller[F[_]](implicit
       .parJoinUnbounded
 
     implicit0(random: Random[F]) <- Random.scalaUtilRandom[F]
-    scrapers = Stream[F, (String, Stream[F, Either[Throwable, FeBuild]])](
+    scrapers = Stream[F, (String, FallibleStream[F, FeBuild])](
       // labelled build streams; the labels are used to keep track of latest
       // versions in the state file so we don't republish on a program restart
       ("canary", FeBuilds[F](Branch.Canary).meteredStartImmediately(6.seconds)),

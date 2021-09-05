@@ -1,17 +1,9 @@
 package zone.slice.chaos
 
-import fs2.{Pipe, Pull}
-import fs2.concurrent.Topic
-import cats.Eq
-import cats.effect.Concurrent
+import fs2.{Stream, Pipe, Pull}
 
-package object poll {
-
-  /** Emit any changes in a stream, additionally publishing them to a topic. */
-  def poll[F[_]: Concurrent, A: Eq](
-    topic: Topic[F, A],
-  ): Pipe[F, A, A] =
-    _.changes.evalTap(topic.publish1)
+package object stream {
+  type FallibleStream[F[_], +A] = Stream[F, Either[Throwable, A]]
 
   /** Filters only the first value of a stream. */
   def filter1[F[_], A](predicate: A => Boolean): Pipe[F, A, A] =

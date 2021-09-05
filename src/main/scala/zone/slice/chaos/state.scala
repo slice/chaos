@@ -1,6 +1,6 @@
 package zone.slice.chaos
 
-import poll.filter1
+import stream.filter1
 
 import cats.effect.Concurrent
 import cats.syntax.all._
