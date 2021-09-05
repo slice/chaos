@@ -16,7 +16,6 @@ import org.http4s.circe._
 import _root_.io.circe.Json
 import _root_.io.circe.literal._
 
-import concurrent.duration._
 import fs2.concurrent.Topic
 
 object publishers {
@@ -46,23 +45,7 @@ class Poller[F[_]](implicit
   publish: Publish[F],
   F: Async[F],
   C: Console[F],
-  random: Random[F],
 ) {
-  private def fakeBuild(version: Int, branch: Branch): FeBuild =
-    FeBuild(
-      branch = branch,
-      hash = "???",
-      number = version,
-      assets = AssetBundle.empty,
-    )
-
-  private def builds(branch: Branch): Stream[F, FeBuild] = (for {
-    baseVersion <- Stream.eval(random.betweenInt(10_000, 100_000 + 1))
-    version     <- Stream.iterate(baseVersion)(_ + 1)
-    repeats     <- Stream.eval(random.betweenInt(2, 6 + 1))
-    version     <- Stream(version).repeatN(repeats.toLong)
-  } yield fakeBuild(version, branch)).metered(1.second)
-
   def pollForever: F[Unit] = for {
     topic <- Topic[F, FeBuild]
 
@@ -85,11 +68,12 @@ class Poller[F[_]](implicit
       .map(stream => subscribe[F, FeBuild](topic, stream))
       .parJoinUnbounded
 
+    implicit0(random: Random[F]) <- Random.scalaUtilRandom[F]
     scrapers = Stream[F, (String, Stream[F, FeBuild])](
       // labelled build streams; the labels are used to keep track of latest
       // versions in the state file so we don't republish on a program restart
-      ("latest canary", builds(Branch.Canary)),
-      ("cool stables", builds(Branch.Stable)),
+      ("latest canary", FeBuilds.fake(Branch.Canary)),
+      ("cool stables", FeBuilds.fake(Branch.Stable)),
     )
     scrape = scrapers
       .map { case label -> builds =>
@@ -127,7 +111,6 @@ object Main extends IOApp.Simple {
       console = Console[F],
       client = httpClient,
     )
-    implicit0(random: Random[F]) <- Resource.eval(Random.scalaUtilRandom[F])
     poller = new Poller[F]
     _ <- Resource.eval(poller.pollForever)
   } yield ()).useForever
