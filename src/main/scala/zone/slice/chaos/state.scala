@@ -1,5 +1,7 @@
 package zone.slice.chaos
 
+import poll.filter1
+
 import cats.effect.Concurrent
 import cats.syntax.all._
 import fs2.io.file.{Path, Files}
@@ -25,6 +27,17 @@ class State(val map: Map[String, Int]) extends AnyVal {
       .scan(this) { case (state, label -> version) =>
         state.update(label, version)
       }
+
+  /** Remove the first value from a stream if its version matches the one in
+    * this state. To use this effectively, you may want to combine it with the
+    * `.changes` combinator.
+    */
+  def deduplicateFirst[F[_], A](label: String)(
+    version: A => Int,
+  ): Pipe[F, A, A] =
+    _.through(
+      filter1(value => this.get(label).map(_ != version(value)).getOrElse(true)),
+    )
 }
 
 object State {

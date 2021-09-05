@@ -65,40 +65,49 @@ class Poller[F[_]](implicit
   def pollForever: F[Unit] = for {
     topic <- Topic[F, FeBuild]
 
-    subscribers = Stream(
-      printPublisher[F]("*** canary build").when(_.branch == Branch.Canary),
-      printPublisher[F]("*** build w/ even version").when(_.number % 2 == 0),
-    )
-
-    consumeAndPublish = subscribers
-      .map(stream => subscribe[F, FeBuild](topic, stream))
-      .parJoinUnbounded
-
     statePath = Path("./state.chaos")
     initialState: State <- Files[F]
       .exists(statePath)
       .ifM(State.read[F](statePath).map(_.some), none[State].pure[F])
       .map(_.getOrElse(State.empty))
-    _ <- C.println(s"*** initial state: $initialState")
+    _ <- C.println(s"*** initial state: ${initialState.map}")
+
+    subscribers = Stream(
+      // print all new builds to stdout:
+      printPublisher[F]("***** NEW BUILD"),
+      // showing off conditionalization with .when:
+      printPublisher[F]("    * canary build").when(_.branch == Branch.Canary),
+      printPublisher[F]("    * build w/ even version").when(_.number % 2 == 0),
+    )
+    // subscribe to the build topic
+    consumeAndPublish = subscribers
+      .map(stream => subscribe[F, FeBuild](topic, stream))
+      .parJoinUnbounded
 
     scrapers = Stream[F, (String, Stream[F, FeBuild])](
+      // labelled build streams; the labels are used to keep track of latest
+      // versions in the state file so we don't republish on a program restart
       ("latest canary", builds(Branch.Canary)),
       ("cool stables", builds(Branch.Stable)),
     )
     scrape = scrapers
-      .through(dedup1FromState(initialState)(_.number))
       .map { case label -> builds =>
-        // throw away build stream labels when submitting to the topic
-        val topic2 = topic.imap[(String, FeBuild)](("", _))(_._2)
-        // inject labels into the build stream
-        builds.map(build => label -> build).through(poll(topic2))
+        builds
+          // poll does two things: (1) only emit changed builds
+          //                       (2) publish to the topic
+          .through(poll(topic))
+          // remove the first build if the version is the same as the one we
+          // had saved on disk
+          .through(initialState.deduplicateFirst(label)(_.number))
+          .map(label -> _)
       }
       .parJoinUnbounded
+      // continuously update the state, tracking the latest builds
       .through(initialState.trackLatest(_.number))
-      .debug(s => s"latest builds state: $s")
       .map(_.encode)
       .through(continuouslyOverwrite(statePath))
 
+    // now scrape and publish at the same time
     work = scrape.concurrently(consumeAndPublish)
     _ <- work.compile.drain
   } yield ()

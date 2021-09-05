@@ -1,6 +1,6 @@
 package zone.slice.chaos
 
-import fs2.{Pipe, Stream, Pull}
+import fs2.{Pipe, Pull}
 import fs2.concurrent.Topic
 import cats.Eq
 import cats.effect.Concurrent
@@ -22,23 +22,4 @@ package object poll {
           else tail.pull.echo
         case None => Pull.done
       }.stream
-
-  /** Deduplicate the first values from a stream of labeled streams according to
-    * a state.
-    */
-  def dedup1FromState[F[_], A](state: State)(
-    valueToVersion: A => Number,
-  ): Pipe[F, (String, Stream[F, A]), (String, Stream[F, A])] =
-    _.map { case label -> stream =>
-      val deduplicationFilter: fs2.Pipe[F, A, A] =
-        filter1(firstValue =>
-          state
-            .get(label)
-            .map(_ != valueToVersion(firstValue))
-            // if there's no last known latest version, always publish
-            .getOrElse(true),
-        )
-
-      label -> stream.through(deduplicationFilter)
-    }
 }
