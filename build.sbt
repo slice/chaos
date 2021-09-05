@@ -31,4 +31,6 @@ lazy val chaos = (project in file(".")).settings(
     "io.circe"      %% "circe-core"          % V.circe,
     "io.circe"      %% "circe-parser"        % V.circe,
   ),
+  // Suppress unused warnings from better-monadic-for.
+  scalacOptions += "-Wconf:msg=\\$implicit\\$:s",
 )

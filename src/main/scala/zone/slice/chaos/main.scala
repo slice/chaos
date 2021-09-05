@@ -111,13 +111,9 @@ object Main extends IOApp.Simple {
     httpClient <- BlazeClientBuilder[F](executionContext)
       .withUserAgent(userAgent)
       .resource
-    // can't do this, because of https://github.com/lampepfl/dotty/issues/12646:
-    //   given Publish[F] = new Publish[F]:
-    //     ...
-    //   poller = Poller[F]
-    publish = Publish.make[F](console = Console[F], client = httpClient)
-    random <- Resource.eval(Random.scalaUtilRandom[F])
-    poller = new Poller[F]()(publish, Async[F], Console[F], random)
+    implicit0(publish: Publish[F]) = Publish.make[F](console = Console[F], client = httpClient)
+    implicit0(random: Random[F]) <- Resource.eval(Random.scalaUtilRandom[F])
+    poller = new Poller[F]
     _ <- Resource.eval(poller.pollForever)
   } yield ()).useForever
 
