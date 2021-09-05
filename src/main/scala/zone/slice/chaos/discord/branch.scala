@@ -3,6 +3,7 @@ package discord
 
 import cats.syntax.all._
 import cats.Eq
+import org.http4s.Uri
 
 sealed trait Branch {
   import Branch._
@@ -28,6 +29,14 @@ sealed trait Branch {
       case Canary      => "canary".some
       case Development => none
     }
+
+  def uri: Uri = {
+    val squished = subdomain.map(_ + ".").getOrElse("")
+    Uri.unsafeFromString(s"https://${squished}discord.com")
+  }
+
+  def clientUri: Uri =
+    uri / "channels" / "@me"
 }
 
 object Branch {
