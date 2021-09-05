@@ -2,11 +2,11 @@ package zone.slice.chaos
 
 import discord._
 import publish._
-import poll._
 import io._
 
 import fs2.Stream
 import fs2.io.file.{Path, Files}
+import fs2.concurrent.Topic
 import cats.effect._
 import cats.effect.std.{Console, Random}
 import cats.syntax.all._
@@ -16,7 +16,7 @@ import org.http4s.circe._
 import _root_.io.circe.Json
 import _root_.io.circe.literal._
 
-import fs2.concurrent.Topic
+import scala.concurrent.duration._
 
 object publishers {
   def printPublisher[F[_]](prefix: String): Publisher[F, FeBuild] =
@@ -69,21 +69,29 @@ class Poller[F[_]](implicit
       .parJoinUnbounded
 
     implicit0(random: Random[F]) <- Random.scalaUtilRandom[F]
-    scrapers = Stream[F, (String, Stream[F, FeBuild])](
+    scrapers = Stream[F, (String, Stream[F, Either[Throwable, FeBuild]])](
       // labelled build streams; the labels are used to keep track of latest
       // versions in the state file so we don't republish on a program restart
-      ("latest canary", FeBuilds.fake(Branch.Canary)),
-      ("cool stables", FeBuilds.fake(Branch.Stable)),
+      ("canary", FeBuilds[F](Branch.Canary).meteredStartImmediately(6.seconds)),
+      ("fake canary", FeBuilds.fake(Branch.Canary)),
+      ("fake stable", FeBuilds.fake(Branch.Stable)),
     )
     scrape = scrapers
       .map { case label -> builds =>
         builds
-          // poll does two things: (1) only emit changed builds
-          //                       (2) publish to the topic
-          .through(poll(topic))
+          .evalMapFilter {
+            case Left(error) =>
+              C.errorln(s"Build stream (\"$label\") errored: $error")
+                .as(none[FeBuild])
+            case Right(r) => r.some.pure[F]
+          }
+          // remove duplicate builds
+          .changes
           // remove the first build if the version is the same as the one we
           // had saved on disk
           .through(initialState.deduplicateFirst(label)(_.number))
+          // publish to the build topic
+          .evalTap(topic.publish1)
           .map(label -> _)
       }
       .parJoinUnbounded

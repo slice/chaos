@@ -1,7 +1,26 @@
 package zone.slice.chaos
 package discord
 
-case class Asset(kind: AssetKind, name: String)
+import org.http4s.Uri
+
+import scala.util.matching._
+
+case class Asset(kind: AssetKind, name: String) {
+  def uri: Uri =
+    Uri.unsafeFromString(s"https://discord.com/assets/$name.${kind.extension}")
+}
+
+object Asset {
+  def discover(
+    regex: UnanchoredRegex,
+    text: String,
+    kind: AssetKind,
+  ): Vector[Asset] =
+    regex
+      .findAllMatchIn(text)
+      .map { m => Asset(kind = kind, name = m.group(1)) }
+      .toVector
+}
 
 sealed trait AssetKind {
   import AssetKind._

@@ -1,6 +1,8 @@
 package zone.slice.chaos
 package publish
 
+import cats.Apply
+import cats.syntax.all._
 import cats.effect.std.Console
 import org.http4s.{Uri, Method}
 import org.http4s.client.Client
@@ -23,13 +25,18 @@ trait Publish[F[_]] {
 }
 
 object Publish {
-  def make[F[_]](console: Console[F], client: Client[F]): Publish[F] =
+  def apply[F[_]](implicit ev: Publish[F]): Publish[F] = ev
+
+  def make[F[_]: Apply](console: Console[F], client: Client[F]): Publish[F] =
     new Publish[F] {
       def output(text: String): F[Unit] =
         console.errorln(text)
+
       def request[A](request: Request[F])(implicit
         decoder: EntityDecoder[F, A],
-      ): F[A] =
-        client.expect(request)
+      ): F[A] = {
+        val log = s"HTTP ${request.method.name} ${request.uri}"
+        console.errorln(log) *> client.expect(request)
+      }
     }
 }
