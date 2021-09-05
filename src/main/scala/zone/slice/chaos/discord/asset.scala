@@ -8,13 +8,13 @@ sealed trait AssetKind {
 
   def extension: String =
     this match {
-      case Script => "js"
+      case Script     => "js"
       case Stylesheet => "css"
     }
 }
 
 object AssetKind {
-  case object Script extends AssetKind
+  case object Script     extends AssetKind
   case object Stylesheet extends AssetKind
 }
 

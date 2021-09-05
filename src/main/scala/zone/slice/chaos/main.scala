@@ -70,7 +70,9 @@ class Poller[F[_]](implicit
       printPublisher[F]("*** build w/ even version").when(_.number % 2 == 0),
     )
 
-    consumeAndPublish = subscribers.map(stream => subscribe[F, FeBuild](topic, stream)).parJoinUnbounded
+    consumeAndPublish = subscribers
+      .map(stream => subscribe[F, FeBuild](topic, stream))
+      .parJoinUnbounded
 
     statePath = Path("./state.chaos")
     initialState: State <- Files[F]
@@ -111,7 +113,10 @@ object Main extends IOApp.Simple {
     httpClient <- BlazeClientBuilder[F](executionContext)
       .withUserAgent(userAgent)
       .resource
-    implicit0(publish: Publish[F]) = Publish.make[F](console = Console[F], client = httpClient)
+    implicit0(publish: Publish[F]) = Publish.make[F](
+      console = Console[F],
+      client = httpClient,
+    )
     implicit0(random: Random[F]) <- Resource.eval(Random.scalaUtilRandom[F])
     poller = new Poller[F]
     _ <- Resource.eval(poller.pollForever)

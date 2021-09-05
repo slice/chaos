@@ -28,4 +28,3 @@ package object publish {
       .evalTap(f(_, publish))
       .drain
 }
-
