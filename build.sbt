@@ -31,6 +31,10 @@ lazy val chaos = (project in file(".")).settings(
     "io.circe"      %% "circe-core"          % V.circe,
     "io.circe"      %% "circe-parser"        % V.circe,
   ),
-  // Suppress unused warnings from better-monadic-for.
+
+  // better-monadic-for enables useful implicit patterns, but the compiler
+  // marks the values as unused even when they actually are being used.
+  //
+  // Relevant: https://github.com/oleg-py/better-monadic-for/issues/50
   scalacOptions += "-Wconf:msg=\\$implicit\\$:s",
 )
