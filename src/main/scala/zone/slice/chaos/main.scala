@@ -7,7 +7,6 @@ import io._
 
 import fs2.Stream
 import fs2.io.file.{Path, Files}
-import cats._
 import cats.effect._
 import cats.effect.std.{Console, Random}
 import cats.syntax.all._
@@ -24,7 +23,7 @@ object publishers {
   def printPublisher[F[_]](prefix: String): Publisher[F, FeBuild] =
     (b: FeBuild, p: Publish[F]) => p.output(s"$prefix: $b")
 
-  def discordWebhookPublisher[F[_]: Monad: Concurrent](
+  def discordWebhookPublisher[F[_]: Concurrent](
       webhook: Uri,
   ): Publisher[F, FeBuild] =
     (b: FeBuild, p: Publish[F]) => {
@@ -60,7 +59,7 @@ class Poller[F[_]](implicit
     baseVersion <- Stream.eval(random.betweenInt(10_000, 100_000 + 1))
     version     <- Stream.iterate(baseVersion)(_ + 1)
     repeats     <- Stream.eval(random.betweenInt(2, 6 + 1))
-    version     <- Stream(version).repeatN(repeats)
+    version     <- Stream(version).repeatN(repeats.toLong)
   } yield fakeBuild(version, branch)).metered(1.second)
 
   val funnyWebhook =
@@ -123,7 +122,7 @@ object Main extends IOApp.Simple {
     publish = Publish.make[F](console = Console[F], client = httpClient)
     random <- Resource.eval(Random.scalaUtilRandom[F])
     poller = new Poller[F]()(publish, Async[F], Console[F], random)
-    program <- Resource.eval(poller.pollForever)
+    _ <- Resource.eval(poller.pollForever)
   } yield ()).useForever
 
   def run: IO[Unit] = program[IO]

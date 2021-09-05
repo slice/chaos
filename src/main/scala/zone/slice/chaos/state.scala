@@ -3,6 +3,7 @@ package zone.slice.chaos
 import cats.effect.Concurrent
 import cats.syntax.all._
 import fs2.io.file.{Path, Files}
+import fs2.Pipe
 
 class State(val map: Map[String, Int]) extends AnyVal {
   def encode: String =
