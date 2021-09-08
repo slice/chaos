@@ -22,7 +22,7 @@ object Asset {
       .toVector
 }
 
-sealed trait AssetKind {
+sealed abstract class AssetKind extends Product with Serializable {
   import AssetKind._
 
   def extension: String =
@@ -33,8 +33,8 @@ sealed trait AssetKind {
 }
 
 object AssetKind {
-  case object Script     extends AssetKind
-  case object Stylesheet extends AssetKind
+  final case object Script     extends AssetKind
+  final case object Stylesheet extends AssetKind
 }
 
 case class AssetBundle(assetMap: Map[AssetKind, Vector[Asset]]) {

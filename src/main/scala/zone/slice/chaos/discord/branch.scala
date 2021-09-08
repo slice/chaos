@@ -5,7 +5,7 @@ import cats.syntax.all._
 import cats.Eq
 import org.http4s.Uri
 
-sealed trait Branch {
+sealed abstract class Branch extends Product with Serializable {
   import Branch._
 
   def color: Int =
@@ -40,10 +40,10 @@ sealed trait Branch {
 }
 
 object Branch {
-  case object Stable      extends Branch
-  case object Ptb         extends Branch
-  case object Canary      extends Branch
-  case object Development extends Branch
+  final case object Stable      extends Branch
+  final case object Ptb         extends Branch
+  final case object Canary      extends Branch
+  final case object Development extends Branch
 
   implicit val eqBranch: Eq[Branch] = Eq.fromUniversalEquals
 }
