@@ -1,5 +1,6 @@
 *.chaos
 /application.*
+*.conf
 
 # Compiled files
 target

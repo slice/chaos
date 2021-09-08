@@ -1,5 +1,6 @@
 package zone.slice.chaos
 
+import config._
 import discord._
 import publish._
 import io._
@@ -16,8 +17,8 @@ import org.http4s.blaze.client.BlazeClientBuilder
 import org.http4s.circe._
 import _root_.io.circe.Json
 import _root_.io.circe.literal._
-
-import scala.concurrent.duration._
+import pureconfig._
+import pureconfig.module.catseffect.syntax._
 
 object publishers {
   def printPublisher[F[_]](prefix: String): Publisher[F, FeBuild] =
@@ -42,7 +43,7 @@ object publishers {
 
 import publishers._
 
-class Poller[F[_]](implicit
+class Poller[F[_]](config: ChaosConfig)(implicit
   publish: Publish[F],
   F: Async[F],
   C: Console[F],
@@ -73,7 +74,10 @@ class Poller[F[_]](implicit
     scrapers = Stream[F, (String, FallibleStream[F, FeBuild])](
       // labelled build streams; the labels are used to keep track of latest
       // versions in the state file so we don't republish on a program restart
-      ("canary", FeBuilds[F](Branch.Canary).meteredStartImmediately(6.seconds)),
+      (
+        "canary",
+        FeBuilds[F](Branch.Canary).meteredStartImmediately(config.interval),
+      ),
       ("fake canary", FeBuilds.fake(Branch.Canary)),
       ("fake stable", FeBuilds.fake(Branch.Stable)),
     )
@@ -111,6 +115,9 @@ object Main extends IOApp.Simple {
   val userAgent =
     org.http4s.headers.`User-Agent`(org.http4s.ProductId("chaos", "0.0.0".some))
 
+  def loadConfig[F[_]: Sync]: F[ChaosConfig] =
+    ConfigSource.defaultApplication.loadF[F, ChaosConfig]()
+
   def program[F[_]: Async: Console]: F[Nothing] = (for {
     executionContext <- Resource.eval(Async[F].executionContext)
     httpClient <- BlazeClientBuilder[F](executionContext)
@@ -120,7 +127,9 @@ object Main extends IOApp.Simple {
       console = Console[F],
       client = httpClient,
     )
-    poller = new Poller[F]
+    config <- Resource.eval(loadConfig)
+    _ <- Resource.eval(Console[F].errorln(s"*** config: $config"))
+    poller = new Poller[F](config)
     _ <- Resource.eval(poller.pollForever)
   } yield ()).useForever
 
