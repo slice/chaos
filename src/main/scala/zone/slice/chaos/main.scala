@@ -13,36 +13,9 @@ import fs2.concurrent.Topic
 import cats.effect._
 import cats.effect.std.{Console, Random}
 import cats.syntax.all._
-import org.http4s.Uri
 import org.http4s.blaze.client.BlazeClientBuilder
-import org.http4s.circe._
-import _root_.io.circe.Json
-import _root_.io.circe.literal._
 import pureconfig._
 import pureconfig.module.catseffect.syntax._
-
-object publishers {
-  def printPublisher[F[_]](prefix: String): Publisher[F, FeBuild] =
-    (b: FeBuild, p: Publish[F]) => p.output(s"$prefix: $b")
-
-  def discordWebhookPublisher[F[_]: Concurrent](
-    webhook: Uri,
-  ): Publisher[F, FeBuild] =
-    (b: FeBuild, p: Publish[F]) => {
-      val embed = json"""
-        {
-          "title": ${s"${b.branch.humanName} ${b.number}"},
-          "description": ${s"Hash: `${b.hash}`"},
-          "color": ${b.branch.color}
-        }
-      """
-      val body = json"""{"embeds": [$embed]}"""
-
-      p.post[Json, Unit](webhook, body)
-    }
-}
-
-import publishers._
 
 class Poller[F[_]](buildTopic: Topic[F, FeBuild], config: ChaosConfig)(implicit
   publish: Publish[F],
@@ -76,6 +49,7 @@ class Poller[F[_]](buildTopic: Topic[F, FeBuild], config: ChaosConfig)(implicit
   def makePublishers: Vector[Publisher[F, FeBuild]] =
     config.publishers.map { publisherConfig =>
       import PublisherConfig._
+      import zone.slice.chaos.publish.publishers._
       (publisherConfig match {
         case Discord(uri, _)  => discordWebhookPublisher[F](uri)
         case Print(format, _) => printPublisher[F](format)
