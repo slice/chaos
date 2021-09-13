@@ -1,5 +1,9 @@
 package zone.slice.chaos.config
 
+import org.http4s.Uri
+import fs2.io.file.Path
+import pureconfig.ConfigReader
+import pureconfig.error.CannotConvert
 import pureconfig.generic.semiauto._
 import scala.concurrent.duration._
 
@@ -8,7 +12,17 @@ sealed abstract class PublisherConfig extends Product with Serializable {
 }
 
 object PublisherConfig {
-  final case class Discord(url: String, scrape: Vector[String])
+  implicit val uriReader = ConfigReader.fromCursor[Uri] { cursor =>
+    cursor.asString.flatMap { string =>
+      Uri.fromString(string) match {
+        case Left(error) =>
+          cursor.failed(CannotConvert(string, "uri", error.message))
+        case Right(uri) => Right(uri)
+      }
+    }
+  }
+
+  final case class Discord(uri: Uri, scrape: Vector[String])
       extends PublisherConfig
   object Discord {
     implicit val reader = deriveReader[Discord]
@@ -25,9 +39,11 @@ object PublisherConfig {
 
 case class ChaosConfig(
   interval: FiniteDuration,
+  stateFilePath: Path,
   publishers: Vector[PublisherConfig],
 )
 
 object ChaosConfig {
-  implicit val reader = deriveReader[ChaosConfig]
+  implicit val pathReader = ConfigReader[String].map(Path.apply)
+  implicit val reader     = deriveReader[ChaosConfig]
 }

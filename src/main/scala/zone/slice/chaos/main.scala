@@ -5,6 +5,7 @@ import discord._
 import publish._
 import io._
 import stream.FallibleStream
+import select._
 
 import fs2.Stream
 import fs2.io.file.{Path, Files}
@@ -43,67 +44,74 @@ object publishers {
 
 import publishers._
 
-class Poller[F[_]](config: ChaosConfig)(implicit
+class Poller[F[_]](buildTopic: Topic[F, FeBuild], config: ChaosConfig)(implicit
   publish: Publish[F],
   F: Async[F],
   C: Console[F],
 ) {
-  def pollForever: F[Unit] = for {
-    topic <- Topic[F, FeBuild]
+  def pollAndPublish(
+    initialState: State,
+    labeledBuildStreams: Stream[F, (String, FallibleStream[F, FeBuild])],
+  ): Stream[F, (String, FeBuild)] =
+    labeledBuildStreams.map { case label -> builds =>
+      builds
+        .evalMapFilter {
+          case Left(error) =>
+            C.errorln(s"""Build stream ("$label") errored.""") *>
+              C.printStackTrace(error).as(none[FeBuild])
+          case Right(build) => build.some.pure[F]
+        }
+        .changes
+        .through(initialState.deduplicateFirst(label)(_.number))
+        .evalTap(buildTopic.publish1)
+        .map(label -> _)
+    }.parJoinUnbounded
 
-    statePath = Path("./state.chaos")
-    initialState: State <- Files[F]
-      .exists(statePath)
-      .ifM(State.read[F](statePath).map(_.some), none[State].pure[F])
+  def determineInitialState(path: Path): F[State] =
+    Files[F]
+      .exists(path)
+      .ifM(State.read[F](path).map(_.some), none[State].pure[F])
       .map(_.getOrElse(State.empty))
-    _ <- C.println(s"*** initial state: ${initialState.map}")
 
-    subscribers = Stream(
-      // print all new builds to stdout:
-      printPublisher[F]("***** NEW BUILD"),
-      // showing off conditionalization with .when:
-      printPublisher[F]("    * canary build").when(_.branch == Branch.Canary),
-      printPublisher[F]("    * build w/ even version").when(_.number % 2 == 0),
+  def makePublishers: Vector[Publisher[F, FeBuild]] =
+    config.publishers.map { publisherConfig =>
+      import PublisherConfig._
+      (publisherConfig match {
+        case Discord(uri, _)  => discordWebhookPublisher[F](uri)
+        case Print(format, _) => printPublisher[F](format)
+      }).when(selectConditions(publisherConfig.scrape).getOrElse { _ =>
+        false
+      })
+    }
+
+  def makeBuildStreams: F[Vector[(String, FallibleStream[F, FeBuild])]] =
+    selectBuildStreams(
+      config.publishers.flatMap(_.scrape),
+      config.interval,
     )
+      .liftTo[F](new RuntimeException("invalid scrape selector, somewhere"))
+
+  def pollForever: F[Unit] = for {
+    initialState <- determineInitialState(Path("./state.chaos"))
+    _            <- C.println(s"*** initial state: ${initialState.map}")
+
+    publishers = makePublishers
+    _ <- C.println(s"[config] publishers: $publishers")
     // subscribe to the build topic
-    consumeAndPublish = subscribers
-      .map(stream => subscribe[F, FeBuild](topic, stream))
+    consumeAndPublish = Stream
+      .emits(publishers)
+      .map(stream => subscribe[F, FeBuild](buildTopic, stream))
       .parJoinUnbounded
 
     implicit0(random: Random[F]) <- Random.scalaUtilRandom[F]
-    scrapers = Stream[F, (String, FallibleStream[F, FeBuild])](
-      // labelled build streams; the labels are used to keep track of latest
-      // versions in the state file so we don't republish on a program restart
-      (
-        "canary",
-        FeBuilds[F](Branch.Canary).meteredStartImmediately(config.interval),
-      ),
-      ("fake canary", FeBuilds.fake(Branch.Canary)),
-      ("fake stable", FeBuilds.fake(Branch.Stable)),
+    labeledBuildStreams          <- makeBuildStreams
+    _ <- C.println(
+      s"[config] build streams: ${labeledBuildStreams.map(_._1).mkString(", ")}",
     )
-    scrape = scrapers
-      .map { case label -> builds =>
-        builds
-          .evalMapFilter {
-            case Left(error) =>
-              C.errorln(s"Build stream (\"$label\") errored: $error")
-                .as(none[FeBuild])
-            case Right(r) => r.some.pure[F]
-          }
-          // remove duplicate builds
-          .changes
-          // remove the first build if the version is the same as the one we
-          // had saved on disk
-          .through(initialState.deduplicateFirst(label)(_.number))
-          // publish to the build topic
-          .evalTap(topic.publish1)
-          .map(label -> _)
-      }
-      .parJoinUnbounded
-      // continuously update the state, tracking the latest builds
+    scrape = pollAndPublish(initialState, Stream.emits(labeledBuildStreams))
       .through(initialState.trackLatest(_.number))
       .map(_.encode)
-      .through(continuouslyOverwrite(statePath))
+      .through(continuouslyOverwrite(config.stateFilePath))
 
     // now scrape and publish at the same time
     work = scrape.concurrently(consumeAndPublish)
@@ -111,12 +119,20 @@ class Poller[F[_]](config: ChaosConfig)(implicit
   } yield ()
 }
 
+object Poller {
+  def loadConfig[F[_]: Sync]: F[ChaosConfig] =
+    ConfigSource.defaultApplication.loadF[F, ChaosConfig]()
+
+  def apply[F[_]: Async: Console: Publish]: F[Poller[F]] = for {
+    config <- loadConfig
+    topic  <- Topic[F, FeBuild]
+    poller = new Poller(buildTopic = topic, config = config)
+  } yield poller
+}
+
 object Main extends IOApp.Simple {
   val userAgent =
     org.http4s.headers.`User-Agent`(org.http4s.ProductId("chaos", "0.0.0".some))
-
-  def loadConfig[F[_]: Sync]: F[ChaosConfig] =
-    ConfigSource.defaultApplication.loadF[F, ChaosConfig]()
 
   def program[F[_]: Async: Console]: F[Nothing] = (for {
     executionContext <- Resource.eval(Async[F].executionContext)
@@ -127,10 +143,7 @@ object Main extends IOApp.Simple {
       console = Console[F],
       client = httpClient,
     )
-    config <- Resource.eval(loadConfig)
-    _ <- Resource.eval(Console[F].errorln(s"*** config: $config"))
-    poller = new Poller[F](config)
-    _ <- Resource.eval(poller.pollForever)
+    _ <- Resource.eval(Poller[F].flatMap(_.pollForever))
   } yield ()).useForever
 
   def run: IO[Unit] = program[IO]
