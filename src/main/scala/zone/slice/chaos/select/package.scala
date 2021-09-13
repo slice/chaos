@@ -34,7 +34,7 @@ package object select {
   def selectBuildStreams[F[_]: Publish: Temporal](
     selector: String,
     every: FiniteDuration,
-  ): Option[Vector[(String, FallibleStream[F, FeBuild])]] =
+  ): Option[Vector[Labeled[BuildStream[F]]]] =
     (selector match {
       case s"fe:$branch" =>
         setToOptionalVector(Select[Branch].multiselect(branch))

@@ -4,7 +4,7 @@ import config._
 import discord._
 import publish._
 import io._
-import stream.FallibleStream
+import stream._
 import select._
 
 import fs2.Stream
@@ -24,8 +24,8 @@ class Poller[F[_]](buildTopic: Topic[F, FeBuild], config: ChaosConfig)(implicit
 ) {
   def pollAndPublish(
     initialState: State,
-    labeledBuildStreams: Stream[F, (String, FallibleStream[F, FeBuild])],
-  ): Stream[F, (String, FeBuild)] =
+    labeledBuildStreams: Stream[F, Labeled[BuildStream[F]]],
+  ): Stream[F, Labeled[FeBuild]] =
     labeledBuildStreams.map { case label -> builds =>
       builds
         .evalMapFilter {
@@ -58,7 +58,7 @@ class Poller[F[_]](buildTopic: Topic[F, FeBuild], config: ChaosConfig)(implicit
       })
     }
 
-  def makeBuildStreams: F[Vector[(String, FallibleStream[F, FeBuild])]] =
+  def makeBuildStreams: F[Vector[Labeled[BuildStream[F]]]] =
     config.publishers
       .flatMap(_.scrape)
       .traverse(selectBuildStreams(_, config.interval))

@@ -2,7 +2,7 @@ package zone.slice.chaos
 package discord
 
 import publish.Publish
-import stream.FallibleStream
+import stream.BuildStream
 
 import fs2.Stream
 import cats.syntax.all._
@@ -31,7 +31,7 @@ object FeRegexes {
 object FeBuilds {
   def apply[F[_]: Publish: Concurrent](
     branch: Branch,
-  ): FallibleStream[F, FeBuild] =
+  ): BuildStream[F] =
     Stream.repeatEval(scrape(branch).attempt)
 
   def scrape[F[_]](
@@ -88,7 +88,7 @@ object FeBuilds {
 
   def fake[F[_]: Temporal](
     branch: Branch,
-  )(implicit R: Random[F]): FallibleStream[F, FeBuild] = (for {
+  )(implicit R: Random[F]): BuildStream[F] = (for {
     baseVersion <- Stream.eval(R.betweenInt(10000, 100001))
     version     <- Stream.iterate(baseVersion)(_ + 1)
     repeats     <- Stream.eval(R.betweenInt(2, 7))
