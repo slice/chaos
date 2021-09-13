@@ -2,6 +2,7 @@ package zone.slice.chaos
 
 import stream.filter1
 
+import cats.Show
 import cats.effect.Concurrent
 import cats.syntax.all._
 import fs2.io.file.{Path, Files}
@@ -57,4 +58,7 @@ object State {
     F.readAll(path).through(fs2.text.utf8.decode).compile.string.map(decode)
 
   def empty: State = new State(Map.empty)
+
+  implicit val show: Show[State] =
+    Show.fromToString[Map[String, Int]].contramap((_: State).map)
 }
