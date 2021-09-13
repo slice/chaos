@@ -1,6 +1,8 @@
 package zone.slice.chaos
 package select
 
+final case class Selected[A](selector: String, value: A)
+
 /** A typeclass that encompasses the ability of selecting a named value from a
   * type. Names should always be assumed to be lowercase.
   */
@@ -27,8 +29,12 @@ trait Select[A] {
         Set(selector)
     }
 
-  def multiselect(selector: String): Set[A] =
-    canonicalize(selector).flatMap(select(_).toSet)
+  def multiselect(selector: String): Set[Selected[A]] =
+    canonicalize(selector).flatMap { canonSelector =>
+      select(canonSelector).map { value =>
+        Selected(canonSelector, value)
+      }.toSet
+    }
 }
 
 object Select {
