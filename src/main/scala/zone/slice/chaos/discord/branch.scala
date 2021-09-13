@@ -1,6 +1,8 @@
 package zone.slice.chaos
 package discord
 
+import select._
+
 import cats.syntax.all._
 import cats.Eq
 import org.http4s.Uri
@@ -46,4 +48,11 @@ object Branch {
   final case object Development extends Branch
 
   implicit val eqBranch: Eq[Branch] = Eq.fromUniversalEquals
+
+  implicit val selectBranch: Select[Branch] = Select.fromPartialFunction {
+    case "s" | "stable"              => Stable
+    case "p" | "ptb"                 => Ptb
+    case "c" | "canary"              => Canary
+    case "d" | "dev" | "development" => Development
+  }
 }
