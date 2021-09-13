@@ -49,10 +49,22 @@ object Branch {
 
   implicit val eqBranch: Eq[Branch] = Eq.fromUniversalEquals
 
-  implicit val selectBranch: Select[Branch] = Select.fromPartialFunction {
-    case "s" | "stable"              => Stable
-    case "p" | "ptb"                 => Ptb
-    case "c" | "canary"              => Canary
-    case "d" | "dev" | "development" => Development
+  implicit val selectBranch: Select[Branch] = new Select[Branch] {
+    val all = Map(
+      "stable"      -> Stable,
+      "ptb"         -> Ptb,
+      "canary"      -> Canary,
+      "development" -> Development,
+    )
+
+    override val star = all.removed("development")
+
+    override val aliases = Map(
+      "s"   -> Stable,
+      "p"   -> Ptb,
+      "c"   -> Canary,
+      "dev" -> Development,
+      "d"   -> Development,
+    )
   }
 }

@@ -59,10 +59,10 @@ class Poller[F[_]](buildTopic: Topic[F, FeBuild], config: ChaosConfig)(implicit
     }
 
   def makeBuildStreams: F[Vector[(String, FallibleStream[F, FeBuild])]] =
-    selectBuildStreams(
-      config.publishers.flatMap(_.scrape),
-      config.interval,
-    )
+    config.publishers
+      .flatMap(_.scrape)
+      .traverse(selectBuildStreams(_, config.interval))
+      .map(_.flatten.distinctBy(_._1))
       .liftTo[F](new RuntimeException("invalid scrape selector, somewhere"))
 
   def pollForever: F[Unit] = for {

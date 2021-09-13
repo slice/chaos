@@ -14,7 +14,9 @@ package object select {
   def selectCondition(selector: String): Option[BuildCond] =
     selector match {
       case s"fe:$branch" =>
-        Select[Branch].select(branch).map { branch => _.branch == branch }
+        val branches = Select[Branch].multiselect(branch)
+        if (branches.isEmpty) none
+        else { (build: FeBuild) => branches.contains(build.branch) }.some
       case _ => none
     }
 
@@ -23,28 +25,24 @@ package object select {
       .traverse(selectCondition)
       .map(_.sequence.map(_.forall(identity)))
 
-  def selectBuildStream[F[_]: Publish: Temporal](
+  def selectBuildStreams[F[_]: Publish: Temporal](
     selector: String,
     every: FiniteDuration,
-  ): Option[(String, FallibleStream[F, FeBuild])] =
+  ): Option[Vector[(String, FallibleStream[F, FeBuild])]] =
     (selector match {
       case s"fe:$branch" =>
-        Select[Branch].select(branch).map { branch =>
-          (selector, FeBuilds[F](branch))
-        }
-      case _ => none
-    }).map { case (label, stream) =>
-      (label, stream.meteredStartImmediately(every))
-    }
-
-  def selectBuildStreams[F[_]: Publish: Temporal](
-    selector: Vector[String],
-    every: FiniteDuration,
-  ): Option[Vector[(String, FallibleStream[F, FeBuild])]] =
-    selector.traverse(selectBuildStream(_, every)).map { labeledStreams =>
-      // Deduplicate build streams according to their label. If two publishers
-      // scrape from `fe:canary`, then we should only have one build stream
-      // scraping from that branch.
-      labeledStreams.distinctBy(_._1)
-    }
+        Select[Branch]
+          .canonicalize(branch)
+          .toVector
+          .map { canonSelector =>
+            Select[Branch].select(canonSelector).map((canonSelector, _))
+          }
+          .sequence
+          .map(_.map { case (canonSelector, branch) =>
+            (s"fe:$canonSelector", FeBuilds[F](branch))
+          })
+      case _ => Vector.empty.some
+    }).map(_.map { case (label, buildStream) =>
+      (label, buildStream.meteredStartImmediately(every))
+    })
 }
