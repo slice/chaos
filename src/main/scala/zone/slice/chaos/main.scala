@@ -62,8 +62,14 @@ class Poller[F[_]](buildTopic: Topic[F, FeBuild], config: ChaosConfig)(implicit
     F.fromEither(
       config.publishers
         .flatMap(_.scrape)
-        .traverse(selectBuildStreams(_, config.interval))
-        .map(_.flatten.distinctBy(_._1)),
+        .traverse(selectBuildStreams(_))
+        .map(
+          _.flatten
+            .distinctBy(_._1)
+            .map { case (label, buildStream) =>
+              (label, buildStream.meteredStartImmediately(config.interval))
+            },
+        ),
     )
 
   def pollForever: F[Unit] = for {

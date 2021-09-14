@@ -7,7 +7,6 @@ import publish._
 
 import cats.syntax.all._
 import cats.effect._
-import scala.concurrent.duration._
 
 object transform {
   private type BuildCond = FeBuild => Boolean
@@ -107,7 +106,6 @@ object transform {
   /** Transforms a selector into a vector of labeled build streams. */
   def selectBuildStreams[F[_]: Publish: Temporal](
     selector: String,
-    every: FiniteDuration,
   ): Either[SelectorTransformException, Vector[Labeled[BuildStream[F]]]] = {
 
     /** Turns a vector of selected variants from a source into a vector of
@@ -127,8 +125,5 @@ object transform {
           intoBuildStreams(source, _)(FeBuilds[F](_)),
         )
       }
-      .map(_.map { case (label, buildStream) =>
-        (label, buildStream.meteredStartImmediately(every))
-      })
   }
 }
