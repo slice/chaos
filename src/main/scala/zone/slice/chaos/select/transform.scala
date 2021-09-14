@@ -34,10 +34,14 @@ object transform {
 
   import SelectorTransformationException._
 
-  sealed abstract class Source extends Product with Serializable
+  sealed abstract class Source extends Product with Serializable {
+    def name: String
+  }
 
   object Source {
-    case object Frontend extends Source
+    case object Frontend extends Source {
+      val name: String = "fe"
+    }
   }
 
   import Source._
@@ -62,7 +66,7 @@ object transform {
     selector: String,
   ): Either[SelectorTransformException, (Source, String)] =
     selector.split(':').toList match {
-      case "fe" :: variant :: Nil =>
+      case Frontend.name :: variant :: Nil =>
         (Frontend, variant).asRight
       case source :: _ :: Nil =>
         InvalidSource(
@@ -106,9 +110,9 @@ object transform {
     every: FiniteDuration,
   ): Either[SelectorTransformException, Vector[Labeled[BuildStream[F]]]] =
     resolveSelectorSource(selector)
-      .flatMap { case (Frontend, variant) =>
+      .flatMap { case (source @ Frontend, variant) =>
         multiselectBranches(variant).map(_.map { case selected =>
-          (s"fe:${selected.selector}", FeBuilds[F](selected.value))
+          (s"${source.name}:${selected.selector}", FeBuilds[F](selected.value))
         })
       }
       .map(_.map { case (label, buildStream) =>
