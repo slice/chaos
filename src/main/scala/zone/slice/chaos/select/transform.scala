@@ -108,14 +108,27 @@ object transform {
   def selectBuildStreams[F[_]: Publish: Temporal](
     selector: String,
     every: FiniteDuration,
-  ): Either[SelectorTransformException, Vector[Labeled[BuildStream[F]]]] =
+  ): Either[SelectorTransformException, Vector[Labeled[BuildStream[F]]]] = {
+
+    /** Turns a vector of selected variants from a source into a vector of
+      * labeled build streams.
+      */
+    def intoBuildStreams[A](
+      source: Source,
+      selected: Vector[Selected[A]],
+    )(toStream: A => BuildStream[F]): Vector[Labeled[BuildStream[F]]] =
+      selected.map { case Selected(selector, value) =>
+        (s"${source.name}:${selector}", toStream(value))
+      }
+
     resolveSelectorSource(selector)
       .flatMap { case (source @ Frontend, variant) =>
-        multiselectBranches(variant).map(_.map { case selected =>
-          (s"${source.name}:${selected.selector}", FeBuilds[F](selected.value))
-        })
+        multiselectBranches(variant).map(
+          intoBuildStreams(source, _)(FeBuilds[F](_)),
+        )
       }
       .map(_.map { case (label, buildStream) =>
         (label, buildStream.meteredStartImmediately(every))
       })
+  }
 }
