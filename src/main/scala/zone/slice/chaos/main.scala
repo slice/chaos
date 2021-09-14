@@ -5,7 +5,7 @@ import discord._
 import publish._
 import io._
 import stream._
-import select._
+import select.transform._
 
 import fs2.Stream
 import fs2.io.file.{Path, Files}
@@ -59,11 +59,12 @@ class Poller[F[_]](buildTopic: Topic[F, FeBuild], config: ChaosConfig)(implicit
     }
 
   def makeBuildStreams: F[Vector[Labeled[BuildStream[F]]]] =
-    config.publishers
-      .flatMap(_.scrape)
-      .traverse(selectBuildStreams(_, config.interval))
-      .map(_.flatten.distinctBy(_._1))
-      .liftTo[F](new RuntimeException("invalid scrape selector, somewhere"))
+    F.fromEither(
+      config.publishers
+        .flatMap(_.scrape)
+        .traverse(selectBuildStreams(_, config.interval))
+        .map(_.flatten.distinctBy(_._1)),
+    )
 
   def pollForever: F[Unit] = for {
     initialState <- determineInitialState(Path("./state.chaos"))
